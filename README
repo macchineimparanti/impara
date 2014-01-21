@@ -1,0 +1,38 @@
+@author: Alessandro Ferrari <alessandroferrari87@gmail.com>
+
+The project macchineimparanti was created with the aim to encourage the collaborative works on machine learning challenges in order to share know how and improve the skills of the challenger, pursuing the open source spirit. 
+
+First release. v0.1
+
+Challenges:
+
+- London Data Scientists Competition (www.kaggle.com)
+  
+  Introduction:
+
+  By typing:
+  python london_data_scientists_competion.py -h
+  in the root folder of the project you will have a complete description and synopsys of the    features currently available. The data concerning the competition are available in the folder LondonDataScientistsCompetion_data. 
+ 
+  Description:
+
+  This script performs classification using scikit-learn, numpy and matplotlib on the London Data Scientists Competition on Kaggle.
+  Classification is perfomed by using an SVM with radial basis functions as kernel. 
+  The method allows to perform features scaling, pca, model selection and recursive features elimination.
+  All these settings can be managed as options of the script. Type "python london_data_scientists_competition.py -h" for more informations.
+
+  Examples of usage:
+
+  Example 1, first attempt (default C_list and gamma_list values), it can take a while:
+  python main.py --pca-enabled --features-scaling-disabled . .
+
+  Example 2, refining model selection (improving results):
+  python main.py --pca-enabled --features-scaling-disabled --C-list=[10,30,50,70,90] --gamma-list=[0.01,0.02,0.03,0.04,0.05] . .
+
+  Example 3, skipping model selection (straightaway to the results):
+  python london_data_scientists_competition.py --pca-enabled --features-scaling-disabled --skip-model-selection --C=50 --gamma=0.023 . .
+
+Licensing:
+
+The materials including the source codes are released with gpl-3.0 license. You should have received a copy of the GNU General Public License along with this tutorial.  If not, see <http://www.gnu.org/licenses/>.
+ 
