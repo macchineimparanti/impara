@@ -113,8 +113,12 @@ class ModelSelection(object):
                 
                 #it is assumed that we are dealing with a sklearn classifier...
                 y_pred = classifier.predict(X_cv)
-                
-                acc = metrics.accuracy_score(y_cv,y_pred)
+
+		if hasattr(metrics,"accuracy_score"):
+                	acc = metrics.accuracy_score(y_cv,y_pred)
+		else:
+			assert hasattr(metrics,"zero_one_score")
+			acc = metrics.zero_one_score(y_cv, y_pred)
                 prec=metrics.precision_score(y_cv,y_pred)
                 recall=metrics.recall_score(y_cv,y_pred)
                 f1_score=metrics.f1_score(y_cv,y_pred)
@@ -181,7 +185,11 @@ class ModelSelection(object):
                 
                     y_pred=classifier.predict(X_cv)
                 
-                    acc = metrics.accuracy_score(y_cv,y_pred)
+                    if hasattr(metrics,"accuracy_score"):
+                	acc = metrics.accuracy_score(y_cv,y_pred)
+		    else:
+			assert hasattr(metrics,"zero_one_score")
+			acc = metrics.zero_one_score(y_cv, y_pred)
                     prec=metrics.precision_score(y_cv,y_pred)
                     recall=metrics.recall_score(y_cv,y_pred)
                     f1_score=metrics.f1_score(y_cv,y_pred)
@@ -289,7 +297,11 @@ class RecursiveFeaturesElimination(object):
                                 
                 y_pred=classifier.predict(X_cv)
                 
-                acc = metrics.accuracy_score(y_cv,y_pred)
+                if hasattr(metrics,"accuracy_score"):
+                    acc = metrics.accuracy_score(y_cv,y_pred)
+		else:
+		    assert hasattr(metrics,"zero_one_score")
+		    acc = metrics.zero_one_score(y_cv, y_pred)
                 prec=metrics.precision_score(y_cv,y_pred)
                 recall=metrics.recall_score(y_cv,y_pred)
                 f1_score=metrics.f1_score(y_cv,y_pred)
