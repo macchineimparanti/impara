@@ -10,8 +10,16 @@ Challenges:
   
   Introduction:
 
+  First, add in the python path the path of the library. 
+  For linux just types in the terminal:
+  >>PYTHONPATH=$PYTHONPATH:/path/to/folder/impara
+  >>export PYTHONPATH
+
+  Move the terminal current working directory to the library root folder:
+  >>cd /path/to/folder/impara
+
   By typing:
-  python london_data_scientists_competion.py -h
+  >>python LondonDataScientistsCompetition/svm_classifier_main.py -h
   in the root folder of the project you will have a complete description and synopsys of the    features currently available. The data concerning the competition are available in the folder LondonDataScientistsCompetion_data. 
  
   Description:
@@ -24,13 +32,13 @@ Challenges:
   Examples of usage:
 
   Example 1, first attempt (default C_list and gamma_list values), it can take a while:
-  python main.py --pca-enabled --features-scaling-disabled . .
+  >>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-disabled ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
 
   Example 2, refining model selection (improving results):
-  python main.py --pca-enabled --features-scaling-disabled --C-list=[10,30,50,70,90] --gamma-list=[0.01,0.02,0.03,0.04,0.05] . .
+  >>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-disabled --C-list=[10,30,50,70,90] --gamma-list=[0.01,0.02,0.03,0.04,0.05] ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
 
   Example 3, skipping model selection (straightaway to the results):
-  python london_data_scientists_competition.py --pca-enabled --features-scaling-disabled --skip-model-selection --C=50 --gamma=0.023 . .
+  >>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-disabled --skip-model-selection --C=50 --gamma=0.023 ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
 
 Licensing:
 
