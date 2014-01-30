@@ -94,7 +94,7 @@ class ModelSelection(object):
         recall_by_C=np.zeros(len(C_list),dtype=np.float)
         f1_by_C=np.zeros(len(C_list),dtype=np.float)
         
-        set_ripartitions = StratifiedShuffleSplit(y, n_iterations = n_iterations, 
+        set_ripartitions = StratifiedShuffleSplit(y, n_iter = n_iterations, 
                                                   test_size = test_size, indices = False)
                 
         n_iter=len(set_ripartitions)
@@ -114,11 +114,11 @@ class ModelSelection(object):
                 #it is assumed that we are dealing with a sklearn classifier...
                 y_pred = classifier.predict(X_cv)
 
-		if hasattr(metrics,"accuracy_score"):
-                	acc = metrics.accuracy_score(y_cv,y_pred)
-		else:
-			assert hasattr(metrics,"zero_one_score")
-			acc = metrics.zero_one_score(y_cv, y_pred)
+                if hasattr(metrics,"accuracy_score"):
+                    acc = metrics.accuracy_score(y_cv,y_pred)
+                else:
+                    assert hasattr(metrics,"zero_one_score")
+                    acc = metrics.zero_one_score(y_cv, y_pred)
                 prec=metrics.precision_score(y_cv,y_pred)
                 recall=metrics.recall_score(y_cv,y_pred)
                 f1_score=metrics.f1_score(y_cv,y_pred)
@@ -162,7 +162,7 @@ class ModelSelection(object):
         recall_by_C_and_gamma=np.zeros((len(self.C_list),len(self.gamma_list)), dtype=np.float)
         f1_by_C_and_gamma=np.zeros((len(self.C_list),len(self.gamma_list)), dtype=np.float)
         
-        set_ripartitions = StratifiedShuffleSplit(y, n_iterations = n_iterations, 
+        set_ripartitions = StratifiedShuffleSplit(y, n_iter = n_iterations, 
                                                   test_size = test_size, indices=False)
     
         n_iter=len(set_ripartitions)
@@ -186,10 +186,10 @@ class ModelSelection(object):
                     y_pred=classifier.predict(X_cv)
                 
                     if hasattr(metrics,"accuracy_score"):
-                	acc = metrics.accuracy_score(y_cv,y_pred)
-		    else:
-			assert hasattr(metrics,"zero_one_score")
-			acc = metrics.zero_one_score(y_cv, y_pred)
+                        acc = metrics.accuracy_score(y_cv,y_pred)
+                    else:
+                        assert hasattr(metrics,"zero_one_score")
+                        acc = metrics.zero_one_score(y_cv, y_pred)
                     prec=metrics.precision_score(y_cv,y_pred)
                     recall=metrics.recall_score(y_cv,y_pred)
                     f1_score=metrics.f1_score(y_cv,y_pred)
@@ -276,7 +276,7 @@ class RecursiveFeaturesElimination(object):
             
             extracted_X = np.reshape(extracted_X,(num_samples,i+1))
             
-            set_ripartitions = StratifiedShuffleSplit(y, n_iterations = self.n_iterations, 
+            set_ripartitions = StratifiedShuffleSplit(y, n_iter = self.n_iterations, 
                                                   test_size = self.test_size, indices=False)
     
             n_iter = len(set_ripartitions)
@@ -299,9 +299,9 @@ class RecursiveFeaturesElimination(object):
                 
                 if hasattr(metrics,"accuracy_score"):
                     acc = metrics.accuracy_score(y_cv,y_pred)
-		else:
-		    assert hasattr(metrics,"zero_one_score")
-		    acc = metrics.zero_one_score(y_cv, y_pred)
+                else:
+                    assert hasattr(metrics,"zero_one_score")
+                    acc = metrics.zero_one_score(y_cv, y_pred)
                 prec=metrics.precision_score(y_cv,y_pred)
                 recall=metrics.recall_score(y_cv,y_pred)
                 f1_score=metrics.f1_score(y_cv,y_pred)
@@ -315,7 +315,28 @@ class RecursiveFeaturesElimination(object):
                 
         return tr_err_rfe, cv_err_rfe,accuracy_rfe,recall_rfe, precision_rfe, f1_score_rfe
                 
+    
+    def select_features(self, features, rfe_curve):
             
+        n_features = rfe_curve.shape
+            
+        t_1_shifted = np.zeros(n_features)
+        
+        t_1_shifted[1:] = rfe_curve[:-1]
+        
+        diff = rfe_curve - t_1_shifted
+        
+        self.mask = diff > 0
+        
+        new_features = features[:, self.mask]
+        
+        return new_features, self.mask
+    
+    
+    def apply_features_selection(self, features):
+        
+        return features[:, self.mask]
+        
             
 class SVM(object):
        
@@ -349,6 +370,28 @@ class SVM(object):
                                        show_f1_score_flag = show_f1_score_flag )
             
         return parameters_result
+    
+    
+    def best_accuracy_C_and_gamma(self, parameters_result):
+    
+        C_max = None
+        gamma_max = None
+        acc_max = 0
+                    
+        for C_cur in xrange(len(parameters_result["C_list"])):
+            for gamma_cur in xrange(len(parameters_result["gamma_list"])):
+                C_ = parameters_result["C_list"][C_cur]
+                gamma_ = parameters_result["gamma_list"][gamma_cur]
+                acc = parameters_result["acc_by_C_and_gamma"][C_cur, gamma_cur]
+                if acc>acc_max:
+                    acc_max = acc
+                    C_max = C_
+                    gamma_max = gamma_
+                    
+        assert C_max is not None
+        assert gamma_max is not None
+        
+        return C_max, gamma_max, acc_max
     
     
     def print_SVM_RBF_results(self, parameters_result, show_accuracy_flag = True, 
@@ -452,7 +495,7 @@ class SVM(object):
             print "Optimal C = {0} and gamma = {1}. f1 score: {2}.".format(C_max, gamma_max, f1_max)
     
     # return tr_err_rfe, cv_err_rfe,accuracy_rfe,recall_rfe, precision_rfe, f1_score_rfe
-    def recursive_features_elimination(self, X, y, C, gamma = None, kernel=SVM_RBF, n_iterations = 10, test_size = 0.3):
+    def recursive_features_elimination_curves(self, X, y, C, gamma = None, kernel=SVM_RBF, n_iterations = 10, test_size = 0.3):
         
          rfe = RecursiveFeaturesElimination(C=C,gamma=gamma,kernel=kernel,
                                             n_iterations=n_iterations,

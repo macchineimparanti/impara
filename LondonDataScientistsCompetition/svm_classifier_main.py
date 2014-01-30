@@ -25,14 +25,17 @@ in the root folder of the project you will have a complete description and synop
 features currently available. The data concerning the competition are available in the folder 
 LondonDataScientistsCompetion/data. 
 
-Example 1, first attempt (default C_list and gamma_list values), it can take a while:
->>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-disabled ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
+Example 1, first attempt (default C_list and gamma_list values, overnight mode), it can take a while:
+>>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-enabled --n-iterations-ms=20 --sparse-filtering --rf-features-selection --rfe-features-selection --n-iterations-rfe=20 --pca-variance-retain=0.85 --overnight-simulation ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
 
-Example 2, refining model selection (improving results):
->>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-disabled --C-list=[10,30,50,70,90] --gamma-list=[0.01,0.02,0.03,0.04,0.05] ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
+Example 2, first attempt (default C_list and gamma_list values, interactive mode):
+>>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-enabled --n-iterations-ms=20 --sparse-filtering --rf-features-selection --rfe-features-selection --n-iterations-rfe=20 --pca-variance-retain=0.85 ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
 
-Example 3, skipping model selection (straightaway to the results):
->>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-disabled --skip-model-selection --C=50 --gamma=0.023 ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
+Example 3, refining model selection (refining model selection):
+>>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-enabled --n-iterations-ms=20 --sparse-filtering --rf-features-selection --rfe-features-selection --n-iterations-rfe=20 --pca-variance-retain=0.85 --C-list=[300,500,700,800,900,1000,1300,2000,3000,5000,7000] --gamma-list=[0.005,0.007,0.008,0.01,0.02,0.03,0.05,0.07,0.09] ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
+
+Example 4, skipping model selection
+>>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-enabled --sparse-filtering --rf-features-selection --pca-variance-retain=0.85 --overnight-simulation --skip-model-selection --C=3000 --gamma=0.008 ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
 '''
 
 import os
@@ -81,9 +84,12 @@ def parse_option():
                                                           "features-scaling-disabled",
                                                           "C-list=","gamma-list=",
                                                           "skip-model-selection",
+                                                          "n-iterations-ms=", #number iterations model selection
                                                           "sparse-filtering",
-                                                          "rf-features-selection",
-                                                          "rfe-features-selection",
+                                                          "rf-features-selection", #random forests features selection
+                                                          "rfe-features-selection", 
+                                                          "n-iterations-rfe=", #number iterations recursive features elimination
+                                                          "overnight-simulation",
                                                           "show-precision-enabled",
                                                           "show-precision-disabled",
                                                           "show-accuracy-enabled",
@@ -105,7 +111,7 @@ def parse_option():
     
     options_list = []
     for o, a in opts:
-         options_list.append(o)
+        options_list.append(o)
     
     for o, a in opts:
         
@@ -182,6 +188,20 @@ def parse_option():
         elif o == "--skip-model-selection" in options_list:
             
             params_dict["skip_model_selection"] = True
+            
+        elif o == "--n-iterations-ms":
+            
+            if "--skip-model-selection" in options_list:
+                print "--n-iterations-ms specified even if --skip-model-selection specified."
+                sys.exit(2)
+            try:
+                params_dict["n_iterations_ms"] = int(a)
+            except Exception as e:
+                print "Error while converting --n-iterations-ms={0} to int.".format(a)
+                sys.exit(2)
+            if not 0<params_dict["n_iterations_ms"]<100:
+                print "Error: 0 < --n-iterations-ms < 100."
+                sys.exit(2)
 
         elif o == "--C-list":
             
@@ -218,6 +238,26 @@ def parse_option():
         elif o == "--rfe-features-selection":
             
             params_dict["rfe_features_selection_flag"] = True
+            
+        elif o == "--n-iterations-rfe":
+        
+            if not "--rfe-features-selection" in options_list:
+                print "--n-iterations-rfe specified even if --rfe-features-selection is not specified."
+                sys.exit(2)
+        
+            try:
+                params_dict["n_iterations_rfe"] = int(a)
+            except Exception as e:
+                print "Error while converting --n-iterations-rfe={0} to int.".format(a)
+                sys.exit(2)
+                
+            if not 0<params_dict["n_iterations_rfe"]<100:
+                print "Error: 0 < --n-iterations-rfe < 100."
+                sys.exit(2)
+        
+        elif o == "--overnight-simulation":
+            
+            params_dict["overnight_simulation"] = True
         
         elif o == "--show-precision-enabled":
             
@@ -337,17 +377,17 @@ def parse_option():
             
             cmd_synopsys = "python london_data_scientists_competition.py [--C=numeric] [--gamma=numeric] [--pca-enabled|--pca-disabled]"+\
                             " [--pca-variance-retain=[0.0..1.0]] [--features-scaling-enabled|--features-scaling-disabled]"+\
-                            " [--C-list=[0.01,0.1,1,..]] [--gamma-list=[0.01,0.1,1,..]] [--skip-model-selection]"+\
+                            " [--C-list=[0.01,0.1,1,..]] [--gamma-list=[0.01,0.1,1,..]] [--skip-model-selection] [--n-iterations-ms=[1..100]]"+\
                             " [--show-precision-enabled|--show-precision-disabled] [--show-accuracy-enabled|--show-accuracy-disabled]"+\
                             " [--show-recall-enabled|--show-recall-disabled] [--show-f1score-enabled|--show-f1score-disabled]"+\
                             " [--show-trerr-enabled|--show-trerr-disabled] [--show-cverr-enabled|--show-cverr-disabled]"+\
-                            " [--sparse-filtering] [--features-selection]"+\
+                            " [--sparse-filtering] [--rf-features-selection] [--rfe-features-selection] [--n-iterations-rfe=[0..100]]"+\
                             " source_path destination_path\n"
             print cmd_synopsys
             print "--C : specifies the regularization parameter of the SVM."
             print "It has to be specified only if --skip-model-selection, otherwise C should be indicate after the model selection process.\n"
             print "--gamma : specifies the gamma of the rbf kernel of the SVM."
-            print "It has to be specified only if --skip-model-selection, otherwise gamma should be indicate after the model selection process.\n"
+            print "It has to be specified only if --skip-model-selection is specified, otherwise gamma should be indicate after the model selection process.\n"
             print "--pca-enabled : it enables linear principal component analysis on the features of the dataset." 
             print "It is mutually exclusive to --pca-disabled.\n"
             print "--pca-disabled: it disables linear principal component analysis on the features of the dataset." 
@@ -359,9 +399,14 @@ def parse_option():
             print "--C-list : specifies the list of C values used in model selection in the format [0.001,0.01,0.1,1,10]. --skip-model-selection must not be activated.\n"
             print "--gamma-list : specifies the list of gamma values used in model selection in the format [0.001,0.01,0.1,1,10]. --skip-model-selection must not be activated.\n"
             print "--skip-model-selection : this flag allows to skip model selection. In this case, C and gamma parameters can be expressed as command line parameters. --C-list and --gamma-list must not be specified.\n"
+            print "--n-iterations-ms: this flag allows to specify the number of iterations to use for averaging in model selection for parameters selection. The number of iterations specified has to be an integer greater than 0 and smaller than 100."
+            print "It has to be specified only if --skip-model-selection is not specified. Its default value is 6.\n"
             print "--sparse-filtering: this flag enables sparse filtering for strong features generation.\n"
             print "--rf-features-selection: this flag enables strong features selection by means of random forests.\n"
             print "--rfe-features-selection: this flag enables strong features selection by means of recursive features elimination.\n"
+            print "--n-iterations-rfe : this flag allows to specify the number of iterations for averaging results of recursive features elimination.The number of iterations specified has to be an integer greater than 0 and smaller than 100."
+            print "It has to be specified only if --rfe-features-selection is specified. Its default value is 5.\n"
+            print "--overnight-simulation : the simulation runs without plottings graph or asking input at the user, selecting automatically parameters.\n"
             print "--show-accuracy-enabled : this flag enables plotting graph and statistics about accuracy results. Default is activated.\n"
             print "--show-accuracy-disabled : this flag disables plotting graph and statistics about accuracy results. Default is activated.\n"
             print "--show-precision-enabled : this flag enables plotting graph and statistics about precision results. Default is disactivated.\n"
@@ -428,6 +473,15 @@ def parse_option():
     if not params_dict.has_key("rfe_features_selection_flag"):
         params_dict["rfe_features_selection_flag"] = False
         
+    if not params_dict.has_key("n_iterations_ms"):
+        params_dict["n_iterations_ms"] = 6
+        
+    if not params_dict.has_key("n_iterations_rfe"):
+        params_dict["n_iterations_rfe"] = 5
+        
+    if not params_dict.has_key("overnight_simulation"):
+        params_dict["overnight_simulation"] = False
+        
     if not params_dict.has_key("show_accuracy_flag"):
         params_dict["show_accuracy_flag"] = True
 
@@ -460,10 +514,11 @@ def main():
     target = np.genfromtxt(open(os.path.join(testdir,params_dict['target_set_fn']),'rb'), delimiter=',')
     test = np.genfromtxt(open(os.path.join(testdir, params_dict['test_set_fn']),'rb'), delimiter=',')
     
-    print "Visualizing features for understanding the most suitable scaling type."
+    if not params_dict["overnight_simulation"]:
+        print "Visualizing features for understanding the most suitable scaling type."
     
-    plot_features(np.vstack((train,test)))
-    plt.show()
+        plot_features(np.vstack((train,test)))
+        plt.show()
     
     #features scaling
     print "Starting features preprocessing ..."
@@ -499,10 +554,11 @@ def main():
     
     if params_dict["pca_flag"]:
         
-        print "Visualizing features after PCA..."
+        if not params_dict["overnight_simulation"]:
+            print "Visualizing features after PCA..."
         
-        plot_features(dataset_pca)
-        plt.show()
+            plot_features(dataset_pca)
+            plt.show()
             
     if params_dict["scaling_flag"]:
         scaler = Scaler(bias_and_variance_flag = True, log10_flag = False, log2_flag = False, log1p_flag = False)
@@ -515,10 +571,11 @@ def main():
     
     if params_dict["scaling_flag"]:
         
-        print "Visualizing features after features preprocessing.."
+        if not params_dict["overnight_simulation"]:
+            print "Visualizing features after features preprocessing.."
     
-        plot_features(dataset_scaled)
-        plt.show()
+            plot_features(dataset_scaled)
+            plt.show()
     
     if params_dict["sparse_filtering_flag"]:
         
@@ -538,6 +595,9 @@ def main():
         
         fsrf = FeaturesSelectionRandomForests()
         fsrf.fit(train_data, target)
+        
+        if not params_dict["overnight_simulation"]:
+            fsrf.plot_features_importance()
         
         train_data = fsrf.transform(train_data)
         test_data = fsrf.transform(test_data)
@@ -561,7 +621,7 @@ def main():
             gamma_list = params_dict["gamma_list"]
                     
         #performing model selection
-        ms_result = classification_obj.model_selection(train_data,target,n_iterations=6,
+        ms_result = classification_obj.model_selection(train_data,target,n_iterations=params_dict["n_iterations_ms"],
                                                        C_list = C_list,
                                                        gamma_list = gamma_list,
                                                        show_accuracy_flag = params_dict["show_accuracy_flag"], 
@@ -569,72 +629,85 @@ def main():
                                                        show_recall_flag = params_dict["show_recall_flag"], 
                                                        show_f1_score_flag = params_dict["show_f1score_flag"])
         
-        #displaying model selection
-        if params_dict["show_accuracy_flag"]:
-            plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["acc_by_C_and_gamma"], zlabel="accuracy", title="Accuracy by C and gamma")
-        if params_dict["show_precision_flag"]:
-            plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["recall_by_C_and_gamma"], zlabel="recall", title="Recall by C and gamma")
-        if params_dict["show_recall_flag"]:
-            plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["prec_by_C_and_gamma"], zlabel="precision", title="Precision by C and gamma")
-        if params_dict["show_f1score_flag"]:
-            plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["f1_by_C_and_gamma"], zlabel="accuracy", title="f1 score by C and gamma")
-        if params_dict["show_trerr_flag"]:
-            plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["tr_err_by_C_and_gamma"], zlabel="training error", title="Training error score by C and gamma")
-        if params_dict["show_cverr_flag"]:
-            plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["cv_err_by_C_and_gamma"], zlabel="cross-validation error", title="Cross-validation error score by C and gamma")
-        plt.show()
+        if not params_dict["overnight_simulation"]:
+            #displaying model selection
+            if params_dict["show_accuracy_flag"]:
+                plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["acc_by_C_and_gamma"], zlabel="accuracy", title="Accuracy by C and gamma")
+            if params_dict["show_precision_flag"]:
+                plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["recall_by_C_and_gamma"], zlabel="recall", title="Recall by C and gamma")
+            if params_dict["show_recall_flag"]:
+                plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["prec_by_C_and_gamma"], zlabel="precision", title="Precision by C and gamma")
+            if params_dict["show_f1score_flag"]:
+                plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["f1_by_C_and_gamma"], zlabel="accuracy", title="f1 score by C and gamma")
+            if params_dict["show_trerr_flag"]:
+                plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["tr_err_by_C_and_gamma"], zlabel="training error", title="Training error score by C and gamma")
+            if params_dict["show_cverr_flag"]:
+                plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["cv_err_by_C_and_gamma"], zlabel="cross-validation error", title="Cross-validation error score by C and gamma")
+            plt.show()
         
-        #entering the C and gamma chosen
-        print "Plotted graphics for model selection. Choose the best C and gamma ..."
-                    
-        while True:
-            C_str = raw_input("Enter the C value suggested by model selection:")
-            try:
-                C = float(C_str)
-            except Exception as e:
-                print "Invalid C inserted. C has to be numeric. Exception: {0}".format(e)
-                continue
-            break
+        if not params_dict["overnight_simulation"]:
+            #entering the C and gamma chosen
+            print "Plotted graphics for model selection. Choose the best C and gamma ..."
+                        
+            while True:
+                C_str = raw_input("Enter the C value suggested by model selection:")
+                try:
+                    C = float(C_str)
+                except Exception as e:
+                    print "Invalid C inserted. C has to be numeric. Exception: {0}".format(e)
+                    continue
+                break
+            
+            while True:
+                gamma_str = raw_input("Enter the gamma value suggested by model selection:")
+                try:
+                    gamma = float(gamma_str)
+                except Exception as e:
+                    print "Invalid gamma inserted. gamma has to be numeric. Exception: {0}".format(e)
+                    continue
+                break
+            
+            print "Parameters selection performed! C = {0}, gamma = {1}".format(C, gamma)    
+    
+        else:
         
-        while True:
-            gamma_str = raw_input("Enter the gamma value suggested by model selection:")
-            try:
-                gamma = float(gamma_str)
-            except Exception as e:
-                print "Invalid gamma inserted. gamma has to be numeric. Exception: {0}".format(e)
-                continue
-            break
-        
-        print "Parameters selection performed! C = {0}, gamma = {1}".format(C, gamma)    
-
-    if params_dict.has_key("C"):
-        C = params_dict["C"]
-        print "C specified by the user: {0}.".format(C)
-    if params_dict.has_key("gamma"):
-        gamma = params_dict["gamma"]
-        print "gamma specified by the user: {0}".format(gamma)
+            C,gamma,accuracy = classification_obj.best_accuracy_C_and_gamma(ms_result)
+    
+            print "C automatically selected equals to {0}.".format(C)
+            print "gamma automatically selected equals to {0}.".format(gamma)
+            print "The accuracy attained by those parameters during model selection is {0}.".format(accuracy)
+    
+    else:
+    
+        if params_dict.has_key("C"):
+            C = params_dict["C"]
+            print "C specified by the user: {0}.".format(C)
+        if params_dict.has_key("gamma"):
+            gamma = params_dict["gamma"]
+            print "gamma specified by the user: {0}".format(gamma)
     
     if params_dict["rfe_features_selection_flag"]:
         print "Performing recursive features elimination..."
     
         rfe = RecursiveFeaturesElimination(C=C,gamma=gamma,kernel=SVM_RBF,
-                                            n_iterations=5,
+                                            n_iterations=params_dict["n_iterations_rfe"],
                                             test_size=0.3)
         tr_err_rfe, cv_err_rfe, accuracy_rfe,recall_rfe, precision_rfe, f1_score_rfe = rfe.rfe_curves(train_data, target) 
     
-        if params_dict["show_accuracy_flag"]:
-            plot_rfe_curve(accuracy_rfe,"accuracy")
-        if params_dict["show_precision_flag"]:
-            plot_rfe_curve(precision_rfe,"precision")
-        if params_dict["show_recall_flag"]:
-            plot_rfe_curve(recall_rfe,"recall")
-        if params_dict["show_f1score_flag"]:
-            plot_rfe_curve(f1_score_rfe,"f1 score")
-        if params_dict["show_trerr_flag"]:
-            plot_rfe_curve(tr_err_rfe,"training error")
-        if params_dict["show_cverr_flag"]:
-            plot_rfe_curve(cv_err_rfe,"cross-validation error")
-        plt.show()
+        if not params_dict["overnight_simulation"]:
+            if params_dict["show_accuracy_flag"]:
+                plot_rfe_curve(accuracy_rfe,"accuracy")
+            if params_dict["show_precision_flag"]:
+                plot_rfe_curve(precision_rfe,"precision")
+            if params_dict["show_recall_flag"]:
+                plot_rfe_curve(recall_rfe,"recall")
+            if params_dict["show_f1score_flag"]:
+                plot_rfe_curve(f1_score_rfe,"f1 score")
+            if params_dict["show_trerr_flag"]:
+                plot_rfe_curve(tr_err_rfe,"training error")
+            if params_dict["show_cverr_flag"]:
+                plot_rfe_curve(cv_err_rfe,"cross-validation error")
+            plt.show()
         
         train_data, mask = rfe.select_features(train_data, accuracy_rfe)
         test_data = rfe.apply_features_selection(test_data)

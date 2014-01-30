@@ -26,19 +26,22 @@ Challenges:
 
   This script performs classification using scikit-learn, numpy and matplotlib on the London Data Scientists Competition on Kaggle.
   Classification is perfomed by using an SVM with radial basis functions as kernel. 
-  The method allows to perform features scaling, pca, model selection and recursive features elimination.
-  All these settings can be managed as options of the script. Type "python london_data_scientists_competition.py -h" for more informations.
+  The method allows to perform features scaling, pca, model selection, sparse filtering, features selection with random forests and recursive features elimination.
+  All these settings can be managed as options of the script. Type "python svm_classifier_main.py -h" for more informations.
 
   Examples of usage:
 
-  Example 1, first attempt (default C_list and gamma_list values), it can take a while:
-  >>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-disabled ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
+  Example 1, first attempt (default C_list and gamma_list values, overnight mode), it can take a while:
+  >>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-enabled --n-iterations-ms=20 --sparse-filtering --rf-features-selection --rfe-features-selection --n-iterations-rfe=20 --pca-variance-retain=0.85 --overnight-simulation ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
 
-  Example 2, refining model selection (improving results):
-  >>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-disabled --C-list=[10,30,50,70,90] --gamma-list=[0.01,0.02,0.03,0.04,0.05] ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
+  Example 2, first attempt (default C_list and gamma_list values, interactive mode):
+  >>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-enabled --n-iterations-ms=20 --sparse-filtering --rf-features-selection --rfe-features-selection --n-iterations-rfe=20 --pca-variance-retain=0.85 ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
 
-  Example 3, skipping model selection (straightaway to the results):
-  >>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-disabled --skip-model-selection --C=50 --gamma=0.023 ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
+  Example 3, refining model selection (refining model selection):
+  >>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-enabled --n-iterations-ms=20 --sparse-filtering --rf-features-selection --rfe-features-selection --n-iterations-rfe=20 --pca-variance-retain=0.85 --C-list=[300,500,700,800,900,1000,1300,2000,3000,5000,7000] --gamma-list=[0.005,0.007,0.008,0.01,0.02,0.03,0.05,0.07,0.09] ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
+
+  Example 4, skipping model selection
+  >>python LondonDataScientistsCompetition/svm_classifier_main.py --pca-enabled --features-scaling-enabled --sparse-filtering --rf-features-selection --pca-variance-retain=0.85 --overnight-simulation --skip-model-selection --C=3000 --gamma=0.008 ./LondonDataScientistsCompetition/data ./LondonDataScientistsCompetition/data
 
 Licensing:
 

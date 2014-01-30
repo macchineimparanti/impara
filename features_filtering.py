@@ -6,6 +6,7 @@ Created on Jan 28, 2014
 from sklearn.ensemble import ExtraTreesClassifier
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 class FeaturesSelectionRandomForests(object):
     
@@ -26,11 +27,16 @@ class FeaturesSelectionRandomForests(object):
             self.feature_importance_th = feature_importance_th
         
         #filter features by forest model
-        trees = ExtraTreesClassifier(n_estimators=100)
-        trees.fit(X, y)
-        pd.DataFrame(trees.feature_importances_).plot(kind='bar')
-        self.features_mask = np.where(trees.feature_importances_ > 0.005)[0]
+        self.trees = ExtraTreesClassifier(n_estimators=100)
+        self.trees.fit(X, y)
+        self.features_mask = np.where(self.trees.feature_importances_ > 0.005)[0]
 
+    
+    def plot_features_importance(self):
+        
+        pd.DataFrame(self.trees.feature_importances_).plot(kind='bar')
+        plt.show()
+        
     
     def transform(self, X):
 
