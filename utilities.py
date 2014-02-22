@@ -8,7 +8,8 @@ from matplotlib import cm
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 import matplotlib.pyplot as plt
 import numpy as np
-
+import pickle
+import os
 
 def plot_features(X):
     
@@ -24,6 +25,20 @@ def plot_features(X):
     ax = fig.add_subplot(111)
     
     ax.plot(xaxis,X,'*')
+
+
+def plot_2d( x, y, xlabel = "log10(C)" , ylabel = "accuracy", title = "Accuracy by C"):
+        
+        fig = plt.figure()
+        fig.canvas.set_window_title('{0}'.format(title)) 
+        ax = fig.add_subplot(111)
+        
+        ax_xlabel = ax.set_xlabel(xlabel)
+        ax_ylabel = ax.set_ylabel(ylabel)
+        
+        x=np.log10(x)
+        surf = ax.plot(x, y)
+        ax.set_ylim(0, 1.01)
 
 
 def plot_3d( x, y, z, xlabel = "log10(gamma)", ylabel ="log10(C)" , zlabel = "accuracy", title = "Accuracy by C and gamma"):
@@ -78,3 +93,27 @@ def save_csv_submitted_labels(predicted_labels, filename):
         for i in xrange(len_labels):
             f.write("{0},{1}\n".format(i+1,int(predicted_labels[i])))
         f.close()
+        
+
+def save_sf_features(sf, training_set, test_set, path):
+    
+    container = dict()
+    container["sf"] = sf
+    container["training_set"] = training_set
+    container["test_set"] = test_set
+    
+    if not os.path.exists(os.path.dirname(path)):
+        raise Exception("The specified directory for saving sparse filtering features does not exist.")
+    
+    f = open(path,"w")
+    pickle.dump(container, f)
+    f.close()
+    
+    
+def load_sf_features(path):
+    
+    f = open(path,"r")
+    container = pickle.load(f)
+    f.close()
+    
+    return container["sf"], container["training_set"], container["test_set"]

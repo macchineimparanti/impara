@@ -43,9 +43,9 @@ import sys
 import getopt
 import classification
 import numpy as np
-from classification import SVM, dataset_scaling, RecursiveFeaturesElimination, SVM_RBF
+from classification import SVM, dataset_scaling, RecursiveFeaturesElimination, SVM_RBF, SVM_linear
 import matplotlib.pyplot as plt
-from utilities import plot_3d, save_csv_submitted_labels, plot_features, plot_rfe_curve
+from utilities import plot_3d, plot_2d, save_csv_submitted_labels, plot_features, plot_rfe_curve, load_sf_features, save_sf_features
 from features_preprocessing import Scaler
 from dimensionality_reduction import PCA
 from sparse_filtering import SparseFilter
@@ -83,9 +83,14 @@ def parse_option():
                                                           "features-scaling-enabled",
                                                           "features-scaling-disabled",
                                                           "C-list=","gamma-list=",
+                                                          "rbf-svm", "linear-svm",
                                                           "skip-model-selection",
                                                           "n-iterations-ms=", #number iterations model selection
                                                           "sparse-filtering",
+                                                          "save-sf-features=",
+                                                          "load-sf-features=",
+                                                          "n-iterations-sf=",
+                                                          "n-features-sf=",
                                                           "rf-features-selection", #random forests features selection
                                                           "rfe-features-selection", 
                                                           "n-iterations-rfe=", #number iterations recursive features elimination
@@ -131,6 +136,11 @@ def parse_option():
             if not "--skip-model-selection" in options_list:
                 print "Warning: gamma specified even if model selection is enabled! Specify --skip-model-selection option to force C and gamma parameters"
                 sys.exit(2)
+                
+            if "--linear-svm" in options_list:
+                print "--gamma specified even if --linear-svm is enabled."
+                sys.exit(2)
+                
             try:
                 params_dict["gamma"] = float(a)
             except Exception as e:
@@ -189,6 +199,14 @@ def parse_option():
             
             params_dict["skip_model_selection"] = True
             
+        elif o == "--rbf-svm" in options_list:
+            
+            params_dict["kernel"] = SVM_RBF
+            
+        elif o == "--linear-svm" in options_list:
+            
+            params_dict["kernel"] = SVM_linear
+            
         elif o == "--n-iterations-ms":
             
             if "--skip-model-selection" in options_list:
@@ -220,6 +238,10 @@ def parse_option():
             if "--skip-model-selection" in options_list:
                 print "gamma_list specified even if --skip-model-selection is enabled."
                 sys.exit(2)
+                
+            if "--linear-svm" in options_list:
+                print "gamma_list specified even if --linear-svm is enabled."
+                sys.exit(2)
         
             try:
                 params_dict["gamma_list"] = parse_list_string( a )
@@ -231,6 +253,67 @@ def parse_option():
             
             params_dict["sparse_filtering_flag"] = True
             
+        elif o == "--load-sf-features":
+            
+            if not "--sparse-filtering" in options_list:
+                print "Cannot enable --load-sf-features if --sparse-filtering is not specified!"
+                sys.exit(2)
+            
+            if a[0]=='.':
+                a = os.path.join(os.getcwd(),a[2:])
+            if not os.path.exists(a):
+                print "Invalid path specified for loading sparse filtering features."
+                sys.exit(2)
+                
+            params_dict["load_sf_flag"] = True
+            params_dict["load_sf_path"] = a
+            
+        elif o == "--save-sf-features":
+            
+            if not "--sparse-filtering" in options_list:
+                print "Cannot enable --save-sf-features if --sparse-filtering is not specified!"
+            
+            if a[0]=='.':
+                a = os.path.join(os.getcwd(),a[2:])
+            if not os.path.exists(os.path.dirname(a)):
+                print "Invalid path specified for saving sparse filtering features.{0}".format(os.path.dirname(a))
+                sys.exit(2)
+            
+            params_dict["save_sf_flag"] = True
+            params_dict["save_sf_path"] = a
+            
+        elif o == "--n-iterations-sf":
+            
+            if not "--sparse-filtering" in options_list:
+                print "--n-iterations-sf specified even if --sparse-filtering is not enabled."
+                sys.exit(2)
+                
+            try:
+                params_dict["n_iterations_sf"] = int(a)
+            except Exception as e:
+                print "Error while converint --n-iterations-fs={0} to int. Exception: {1}".format(a,e)
+                sys.exit(2)
+            
+            if not 0<params_dict["n_iterations_sf"]<=100000:
+                print "Error: --n-iterations-sf has to be greater than 0 and smaller than 100000."
+                sys.exit(2)
+            
+        elif o == "--n-features-sf":
+            
+            if not "--n-features-sf" in options_list:
+                print "--n-features-sf specified even if --sparse-filtering is not enabled."
+                sys.exit(2)
+                
+            try:
+                params_dict["n_features_sf"] = int(a)
+            except Exception as e:
+                print "Error while converint --n-features-fs={0} to int. Exception: {1}".format(a,e)
+                sys.exit(2)
+                
+            if not 0<params_dict["n_features_sf"]<=100000:
+                print "Error: --n-features-sf has to be greater than 0 and smaller than 100000."
+                sys.exit(2)
+                
         elif o == "--rf-features-selection":
             
             params_dict["rf_features_selection_flag"] = True
@@ -375,7 +458,7 @@ def parse_option():
 
             print description
             
-            cmd_synopsys = "python london_data_scientists_competition.py [--C=numeric] [--gamma=numeric] [--pca-enabled|--pca-disabled]"+\
+            cmd_synopsys = "python london_data_scientists_competition.py [ { --rbf-svm | --linear-svm } ] [--C=numeric] [--gamma=numeric] [--pca-enabled|--pca-disabled]"+\
                             " [--pca-variance-retain=[0.0..1.0]] [--features-scaling-enabled|--features-scaling-disabled]"+\
                             " [--C-list=[0.01,0.1,1,..]] [--gamma-list=[0.01,0.1,1,..]] [--skip-model-selection] [--n-iterations-ms=[1..100]]"+\
                             " [--show-precision-enabled|--show-precision-disabled] [--show-accuracy-enabled|--show-accuracy-disabled]"+\
@@ -384,6 +467,8 @@ def parse_option():
                             " [--sparse-filtering] [--rf-features-selection] [--rfe-features-selection] [--n-iterations-rfe=[0..100]]"+\
                             " source_path destination_path\n"
             print cmd_synopsys
+            print "--rbf-svm : specified to use a radial basis function kernel. It requires the definition of the parameters C and gamma, that may be defined by model selection, or they may be indicated directly. It is mutual exclusive respect with --linear-svm."
+            print "--linear-svm : specified to use a linear kernel svm. It is enabled by default. If it is enabled, --gamma and --gamma-list cannot be specified. It is mutual exclusive to --rbf-svm."
             print "--C : specifies the regularization parameter of the SVM."
             print "It has to be specified only if --skip-model-selection, otherwise C should be indicate after the model selection process.\n"
             print "--gamma : specifies the gamma of the rbf kernel of the SVM."
@@ -402,6 +487,10 @@ def parse_option():
             print "--n-iterations-ms: this flag allows to specify the number of iterations to use for averaging in model selection for parameters selection. The number of iterations specified has to be an integer greater than 0 and smaller than 100."
             print "It has to be specified only if --skip-model-selection is not specified. Its default value is 6.\n"
             print "--sparse-filtering: this flag enables sparse filtering for strong features generation.\n"
+            print "--n-iterations-sf : this allows to specify the number of iteration for sparse filtering optimization. By default 1000. It has to be specified when --sparse-filtering is enabled.\n"
+            print "--n-features-sf : this allows to specify the number of features for sparse filtering. By default 50. It has to be specified when --sparse-filtering is enabled.\n"
+            print "--save-sf-features: since sparse filtering is time consuming, it is possible to save the calculated features and re-load them in the nexts run. It has to specified with --sparse filtering enabled.\n"
+            print "--load-sf-features: since sparse filtering is time consuming, it is possible to load pre-calculated features. It has to specified with --sparse filtering enabled.\n"
             print "--rf-features-selection: this flag enables strong features selection by means of random forests.\n"
             print "--rfe-features-selection: this flag enables strong features selection by means of recursive features elimination.\n"
             print "--n-iterations-rfe : this flag allows to specify the number of iterations for averaging results of recursive features elimination.The number of iterations specified has to be an integer greater than 0 and smaller than 100."
@@ -423,7 +512,7 @@ def parse_option():
             sys.exit(0)
             
         else:
-            print "Unrecognized option: {0}. For details: python svm_classifier_main.py -h ".format(0)
+            print "Unrecognized option: {0}. For details: python svm_classifier_main.py -h ".format(o)
             sys.exit(2)
     
     if len(sys.argv) < 3:
@@ -461,12 +550,27 @@ def parse_option():
     if not params_dict.has_key("pca_variance_retain"):
         params_dict["pca_variance_retain"] = 1.0
         
+    if not params_dict.has_key("kernel"):
+        params_dict["kernel"] = SVM_linear
+        
     if not params_dict.has_key("skip_model_selection"):
         params_dict["skip_model_selection"] = False
  
     if not params_dict.has_key("sparse_filtering_flag"):
         params_dict["sparse_filtering_flag"] = False
-                
+        
+    if not params_dict.has_key("n_iterations_sf"):
+        params_dict["n_iterations_sf"] = 1000
+        
+    if not params_dict.has_key("n_features_sf"):
+        params_dict["n_features_sf"] = 50
+        
+    if not params_dict.has_key("load_sf_flag"):
+        params_dict["load_sf_flag"] = False
+
+    if not params_dict.has_key("save_sf_flag"):
+        params_dict["save_sf_flag"] = False
+            
     if not params_dict.has_key("rf_features_selection_flag"):
         params_dict["rf_features_selection_flag"] = False
         
@@ -527,10 +631,16 @@ def main():
         
         print "Performing sparse filtering..."
         
-        sf = SparseFilter(n_features=50, n_iterations=1000)
-        sf.fit(np.r_[train,test])
-        train_sf = sf.transform(train)
-        test_sf = sf.transform(test)
+        if params_dict["load_sf_flag"]:
+            sf, train_sf, test_sf = load_sf_features(params_dict["load_sf_path"])
+        else:
+            sf = SparseFilter(n_features=params_dict["n_features_sf"], n_iterations=params_dict["n_iterations_sf"])
+            sf.fit(np.r_[train,test])
+            train_sf = sf.transform(train)
+            test_sf = sf.transform(test)
+        
+        if params_dict["save_sf_flag"]:
+            save_sf_features(sf, train_sf, test_sf, params_dict["save_sf_path"])
         
         print "Features sparse filtering performed!"
         
@@ -615,13 +725,17 @@ def main():
         else:
             C_list = params_dict["C_list"]
         
-        if not params_dict.has_key("gamma_list"):
-            gamma_list = [0.0001, 0.001,0.01,0.1,1,10,100,1000,10000]
+        if params_dict["kernel"] == SVM_RBF: 
+            if not params_dict.has_key("gamma_list"):
+                gamma_list = [0.0001, 0.001,0.01,0.1,1,10,100,1000,10000]
+            else:
+                gamma_list = params_dict["gamma_list"]
         else:
-            gamma_list = params_dict["gamma_list"]
-                    
+            gamma_list = None
+            
         #performing model selection
-        ms_result = classification_obj.model_selection(train_data,target,n_iterations=params_dict["n_iterations_ms"],
+        ms_result = classification_obj.model_selection(train_data,target, kernel = params_dict["kernel"], 
+                                                       n_iterations=params_dict["n_iterations_ms"],
                                                        C_list = C_list,
                                                        gamma_list = gamma_list,
                                                        show_accuracy_flag = params_dict["show_accuracy_flag"], 
@@ -631,18 +745,35 @@ def main():
         
         if not params_dict["overnight_simulation"]:
             #displaying model selection
-            if params_dict["show_accuracy_flag"]:
-                plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["acc_by_C_and_gamma"], zlabel="accuracy", title="Accuracy by C and gamma")
-            if params_dict["show_precision_flag"]:
-                plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["recall_by_C_and_gamma"], zlabel="recall", title="Recall by C and gamma")
-            if params_dict["show_recall_flag"]:
-                plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["prec_by_C_and_gamma"], zlabel="precision", title="Precision by C and gamma")
-            if params_dict["show_f1score_flag"]:
-                plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["f1_by_C_and_gamma"], zlabel="accuracy", title="f1 score by C and gamma")
-            if params_dict["show_trerr_flag"]:
-                plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["tr_err_by_C_and_gamma"], zlabel="training error", title="Training error score by C and gamma")
-            if params_dict["show_cverr_flag"]:
-                plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["cv_err_by_C_and_gamma"], zlabel="cross-validation error", title="Cross-validation error score by C and gamma")
+            if params_dict["kernel"] == SVM_RBF:
+                if params_dict["show_accuracy_flag"]:
+                    plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["acc_by_C_and_gamma"], zlabel="accuracy", title="Accuracy by C and gamma")
+                if params_dict["show_precision_flag"]:
+                    plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["recall_by_C_and_gamma"], zlabel="recall", title="Recall by C and gamma")
+                if params_dict["show_recall_flag"]:
+                    plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["prec_by_C_and_gamma"], zlabel="precision", title="Precision by C and gamma")
+                if params_dict["show_f1score_flag"]:
+                    plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["f1_by_C_and_gamma"], zlabel="accuracy", title="f1 score by C and gamma")
+                if params_dict["show_trerr_flag"]:
+                    plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["tr_err_by_C_and_gamma"], zlabel="training error", title="Training error score by C and gamma")
+                if params_dict["show_cverr_flag"]:
+                    plot_3d(x=ms_result["gamma_list"], y=ms_result["C_list"], z=ms_result["cv_err_by_C_and_gamma"], zlabel="cross-validation error", title="Cross-validation error score by C and gamma")
+            elif params_dict["kernel"] == SVM_linear:
+                if params_dict["show_accuracy_flag"]:
+                    plot_2d(x=ms_result["C_list"], y=ms_result["acc_by_C"], ylabel="accuracy", title="Accuracy by C")
+                if params_dict["show_precision_flag"]:
+                    plot_2d(x=ms_result["C_list"], y=ms_result["recall_by_C"], zlabel="recall", title="Recall by C")
+                if params_dict["show_recall_flag"]:
+                    plot_2d(x=ms_result["C_list"], y=ms_result["prec_by_C_and_gamma"], zlabel="precision", title="Precision by C and gamma")
+                if params_dict["show_f1score_flag"]:
+                    plot_2d(x=ms_result["C_list"], y=ms_result["f1_by_C"], ylabel="accuracy", title="f1 score by C")
+                if params_dict["show_trerr_flag"]:
+                    plot_2d(x=ms_result["C_list"], y=ms_result["tr_err_by_C"], ylabel="training error", title="Training error score by C")
+                if params_dict["show_cverr_flag"]:
+                    plot_2d(x=ms_result["C_list"], y=ms_result["cv_err_by_C"], ylabel="cross-validation error", title="Cross-validation error score by C")
+            else:
+                raise Exception("Unsupported kernel type!")
+            
             plt.show()
         
         if not params_dict["overnight_simulation"]:
@@ -658,23 +789,33 @@ def main():
                     continue
                 break
             
-            while True:
-                gamma_str = raw_input("Enter the gamma value suggested by model selection:")
-                try:
-                    gamma = float(gamma_str)
-                except Exception as e:
-                    print "Invalid gamma inserted. gamma has to be numeric. Exception: {0}".format(e)
-                    continue
-                break
+            if params_dict["kernel"] == SVM_RBF:
+                while True:
+                    gamma_str = raw_input("Enter the gamma value suggested by model selection:")
+                    try:
+                        gamma = float(gamma_str)
+                    except Exception as e:
+                        print "Invalid gamma inserted. gamma has to be numeric. Exception: {0}".format(e)
+                        continue
+                    break
             
-            print "Parameters selection performed! C = {0}, gamma = {1}".format(C, gamma)    
+            if params_dict["kernel"] == SVM_linear:
+                print "Parameters selection performed! C = {0}.".format(C)
+            else:
+                print "Parameters selection performed! C = {0}, gamma = {1}".format(C, gamma)    
     
         else:
-        
-            C,gamma,accuracy = classification_obj.best_accuracy_C_and_gamma(ms_result)
-    
+            
+            if params_dict["kernel"] == SVM_linear:
+                C,accuracy = classification_obj.best_accuracy_C(ms_result)
+            elif params_dict["kernel"] == SVM_RBF:
+                C,gamma,accuracy = classification_obj.best_accuracy_C_and_gamma(ms_result)
+            else:
+                raise Exception("Unsupported kernel type!")
+                
             print "C automatically selected equals to {0}.".format(C)
-            print "gamma automatically selected equals to {0}.".format(gamma)
+            if params_dict["kernel"] == SVM_RBF:
+                print "gamma automatically selected equals to {0}.".format(gamma)
             print "The accuracy attained by those parameters during model selection is {0}.".format(accuracy)
     
     else:
@@ -688,10 +829,18 @@ def main():
     
     if params_dict["rfe_features_selection_flag"]:
         print "Performing recursive features elimination..."
-    
-        rfe = RecursiveFeaturesElimination(C=C,gamma=gamma,kernel=SVM_RBF,
-                                            n_iterations=params_dict["n_iterations_rfe"],
-                                            test_size=0.3)
+        
+        if params_dict["kernel"] == SVM_linear:
+            rfe = RecursiveFeaturesElimination(C=C,kernel=SVM_linear,
+                                               n_iterations=params_dict["n_iterations_rfe"],
+                                               test_size=0.3)
+        elif params_dict["kernel"] == SVM_RBF:
+            rfe = RecursiveFeaturesElimination(C=C,gamma=gamma,kernel=SVM_RBF,
+                                               n_iterations=params_dict["n_iterations_rfe"],
+                                               test_size=0.3)
+        else:
+                raise Exception("Unsupported kernel type!")
+            
         tr_err_rfe, cv_err_rfe, accuracy_rfe,recall_rfe, precision_rfe, f1_score_rfe = rfe.rfe_curves(train_data, target) 
     
         if not params_dict["overnight_simulation"]:
@@ -713,25 +862,16 @@ def main():
         test_data = rfe.apply_features_selection(test_data)
     
         print "Recursive features elimination done!."
-    
-    """num_samples, num_features = train_pca.shape
-    
-    while True:
-        K_str = raw_input("Enter the number of components to keep:")
-        try:
-            K = float(K_str)
-        except Exception as e:
-            print "Invalid number of components inserted. number of components has to be numeric. Exception: {0}".format(e)
-            continue
-        if not 0 < K < num_features:
-            print "Number of components has to be smaller than {0} and greater than 0.".format(num_features)
-            continue
-        break"""
-    
+       
     #training
     print "Performing training..."
     
-    classifier = classification_obj.training(train_data, target, C=C, gamma=gamma)
+    if params_dict["kernel"] == SVM_linear:
+        classification_obj.training(train_data, target, kernel = SVM_linear, C=C)
+    elif params_dict["kernel"] == SVM_RBF:
+        classification_obj.training(train_data, target, kernel = SVM_RBF, C=C, gamma=gamma)
+    else:
+        raise Exception("Unsupported kernel type!")
     
     print "Training performed!"
     
@@ -739,6 +879,12 @@ def main():
     print "Performing classification on the test set..."
     
     predicted = classification_obj.classify(test_data)
+    
+    if params_dict["kernel"] == SVM_linear:
+        acc, prec, rec, f1 = classification_obj.performance_estimation(train_data, target, kernel = params_dict["kernel"], C = C)
+    elif params_dict["kernel"] == SVM_RBF: 
+        acc, prec, rec, f1 = classification_obj.performance_estimation(train_data, target, kernel = params_dict["kernel"], C = C, gamma = gamma)
+    print "Estimated performances:\nAccuracy: {0}\nPrecision: {1}\nRecall: {2}\nf1 Score: {3}".format(acc, prec, rec, f1)
     
     print "Classification performed on the test set!"
     

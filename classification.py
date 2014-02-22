@@ -7,7 +7,7 @@ Created on Nov 21, 2013
 from sklearn.cross_validation import train_test_split
 from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import classification_report
-from sklearn.svm import SVC
+from sklearn.svm import SVC, LinearSVC
 from sklearn import metrics
 from sklearn import preprocessing
 from sklearn.cross_validation import StratifiedShuffleSplit
@@ -104,7 +104,7 @@ class ModelSelection(object):
             idx_C=0
             for C in C_list:
                 
-                classifier = classifier_by_C_function(C=C)
+                classifier = classifier_by_C_function(X_tr, y_tr,C=C)
                           
                 tr_err, cv_err = error_measure_function(classifier,X_tr,y_tr,X_cv,y_cv)
                 
@@ -226,7 +226,7 @@ def SVM_RBF_by_C_and_gamma_function(X,y,C,gamma):
     
 def linear_SVM_by_C_function(X,y,C):
     
-    classifier = SVC(kernel="linear",C=C)
+    classifier = LinearSVC(C=C)
     classifier.fit(X,y)
        
     return classifier
@@ -372,6 +372,23 @@ class SVM(object):
         return parameters_result
     
     
+    def best_accuracy_C(self, parameters_result):
+    
+        C_max = None
+        acc_max = 0
+                    
+        for C_cur in xrange(len(parameters_result["C_list"])):
+            C_ = parameters_result["C_list"][C_cur]
+            acc = parameters_result["acc_by_C"][C_cur]
+            if acc>acc_max:
+                acc_max = acc
+                C_max = C_
+                    
+        assert C_max is not None
+
+        return C_max, acc_max
+    
+    
     def best_accuracy_C_and_gamma(self, parameters_result):
     
         C_max = None
@@ -512,7 +529,7 @@ class SVM(object):
             self.classifier = SVC(kernel="rbf",C=C,gamma=gamma)
             self.classifier.fit(X,y)
         elif kernel == SVM_linear:
-            self.classifer = SVC(kernel="linear",C=C)
+            self.classifier = LinearSVC(C=C)
             self.classifier.fit(X,y)
         else:
             raise Exception("Classification kernel not supported!")
@@ -525,3 +542,42 @@ class SVM(object):
         assert hasattr(self,"classifier")
         
         return self.classifier.predict(X)
+    
+    
+    def performance_estimation(self, X, y, kernel = SVM_RBF, C = None, gamma = None, n_iterations = 20, test_size = 0.3):
+        
+        assert isinstance(C,(int,float))
+        
+        set_ripartitions = StratifiedShuffleSplit(y, n_iter = n_iterations, 
+                                                  test_size = test_size, indices = False)
+        
+        if kernel == SVM_linear:
+            classifier = LinearSVC(C=C)
+        elif kernel == SVM_RBF:
+            assert isinstance(gamma,(int,float))
+            classifier = SVC(kernel="rbf", C=C, gamma=gamma)
+        
+        accuracy_avg = 0.0
+        precision_avg = 0.0
+        recall_avg = 0.0
+        f1_score_avg = 0.0
+        
+        for train,test in set_ripartitions:
+            X_tr,X_cv,y_tr,y_cv =X[train],X[test],y[train],y[test]
+            classifier.fit(X_tr, y_tr)
+            y_pred=classifier.predict(X_cv)
+            if hasattr(metrics,"accuracy_score"):
+                acc = metrics.accuracy_score(y_cv,y_pred)
+            else:
+                assert hasattr(metrics,"zero_one_score")
+                acc = metrics.zero_one_score(y_cv, y_pred)
+            prec=metrics.precision_score(y_cv,y_pred)
+            recall=metrics.recall_score(y_cv,y_pred)
+            f1_score=metrics.f1_score(y_cv,y_pred)
+            
+            accuracy_avg = accuracy_avg + acc / n_iterations
+            precision_avg = precision_avg + prec / n_iterations
+            recall_avg = recall_avg + recall / n_iterations
+            f1_score_avg = f1_score_avg + f1_score / n_iterations
+            
+        return accuracy_avg, precision_avg, recall_avg, f1_score_avg
