@@ -15,7 +15,7 @@ def soft_absolute(u):
 def logistic(u):
     return 1. / (1. + np.exp(-u))
 
-class SparseFilter(BaseEstimator, TransformerMixin):
+class SparseFilterLayer(BaseEstimator, TransformerMixin):
       
     def __init__(self, n_features = 200, n_iterations = 300, activate=soft_absolute):
         self.epsilon = 1e-8,
@@ -52,3 +52,34 @@ class SparseFilter(BaseEstimator, TransformerMixin):
         Y = Y / np.sqrt(np.sum(Y*Y, axis=1)[:, np.newaxis] + self.epsilon)
         
         return Y
+    
+class SparseFilter(object):
+    
+    def __init__(self, n_layers = 1, n_iterations = 1000, n_features = 120):
+        self.n_layers = n_layers
+        self.n_iterations = n_iterations
+        self.n_features = n_features
+        
+    def fit(self, X):
+        
+        self.layers_list = []
+        data = X
+        for i in xrange(self.n_layers):
+            layer = SparseFilterLayer(n_features = self.n_features,
+                                   n_iterations = self.n_iterations)
+            layer.fit(data)
+            data = layer.transform(data)
+            self.layers_list.append(layer)
+            
+    def transform(self, X):
+        
+        feat = None
+        data = X
+        for layer in self.layers_list:
+            data = layer.transform(data)
+            if feat is None:
+                feat = data
+            else:
+                feat = np.hstack((feat, data))
+                
+        return feat

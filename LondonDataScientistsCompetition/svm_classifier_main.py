@@ -458,13 +458,13 @@ def parse_option():
 
             print description
             
-            cmd_synopsys = "python london_data_scientists_competition.py [ { --rbf-svm | --linear-svm } ] [--C=numeric] [--gamma=numeric] [--pca-enabled|--pca-disabled]"+\
-                            " [--pca-variance-retain=[0.0..1.0]] [--features-scaling-enabled|--features-scaling-disabled]"+\
-                            " [--C-list=[0.01,0.1,1,..]] [--gamma-list=[0.01,0.1,1,..]] [--skip-model-selection] [--n-iterations-ms=[1..100]]"+\
-                            " [--show-precision-enabled|--show-precision-disabled] [--show-accuracy-enabled|--show-accuracy-disabled]"+\
-                            " [--show-recall-enabled|--show-recall-disabled] [--show-f1score-enabled|--show-f1score-disabled]"+\
-                            " [--show-trerr-enabled|--show-trerr-disabled] [--show-cverr-enabled|--show-cverr-disabled]"+\
-                            " [--sparse-filtering] [--rf-features-selection] [--rfe-features-selection] [--n-iterations-rfe=[0..100]]"+\
+            cmd_synopsys = "python london_data_scientists_competition.py [ { --rbf-svm | --linear-svm } ] [--C=numeric] [--gamma=numeric] [ { --pca-enabled | --pca-disabled } ]"+\
+                            " [ --pca-variance-retain=[0.0..1.0] ] [ { --features-scaling-enabled | --features-scaling-disabled } ]"+\
+                            " [ --C-list=[0.01,0.1,1,..] ] [ --gamma-list=[0.01,0.1,1,..] ] [ --skip-model-selection ] [ --n-iterations-ms=[1..100] ]"+\
+                            " [ { --show-precision-enabled | --show-precision-disabled } ] [ { --show-accuracy-enabled | --show-accuracy-disabled } ]"+\
+                            " [ { --show-recall-enabled | --show-recall-disabled } ] [ { --show-f1score-enabled | --show-f1score-disabled] }"+\
+                            " [ { --show-trerr-enabled | --show-trerr-disabled } ] [ { --show-cverr-enabled | --show-cverr-disabled] }"+\
+                            " [--sparse-filtering] [--n-iterations-sf=[0..100000]] [--n-features-sf=[0..10000]] [--rf-features-selection] [--rfe-features-selection] [--n-iterations-rfe=[0..100]]"+\
                             " source_path destination_path\n"
             print cmd_synopsys
             print "--rbf-svm : specified to use a radial basis function kernel. It requires the definition of the parameters C and gamma, that may be defined by model selection, or they may be indicated directly. It is mutual exclusive respect with --linear-svm."
@@ -634,7 +634,7 @@ def main():
         if params_dict["load_sf_flag"]:
             sf, train_sf, test_sf = load_sf_features(params_dict["load_sf_path"])
         else:
-            sf = SparseFilter(n_features=params_dict["n_features_sf"], n_iterations=params_dict["n_iterations_sf"])
+            sf = SparseFilter(n_layers=2,n_features=params_dict["n_features_sf"], n_iterations=params_dict["n_iterations_sf"])
             sf.fit(np.r_[train,test])
             train_sf = sf.transform(train)
             test_sf = sf.transform(test)
@@ -643,6 +643,8 @@ def main():
             save_sf_features(sf, train_sf, test_sf, params_dict["save_sf_path"])
         
         print "Features sparse filtering performed!"
+        
+        print train_sf.shape
         
     dataset = np.r_[train, test]
         
