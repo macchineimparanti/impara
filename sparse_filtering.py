@@ -55,10 +55,15 @@ class SparseFilterLayer(BaseEstimator, TransformerMixin):
     
 class SparseFilter(object):
     
-    def __init__(self, n_layers = 1, n_iterations = 1000, n_features = 120):
+    def __init__(self, n_layers = 1, n_iterations = 1000, n_features = 120, layers_list = None):
         self.n_layers = n_layers
         self.n_iterations = n_iterations
         self.n_features = n_features
+        
+        if layers_list is not None:
+            self.layers_list = layers_list
+            self.n_layers = len(layers_list)
+            self.n_features = int(layers_list[0].n_features)
         
     def fit(self, X):
         
@@ -83,3 +88,23 @@ class SparseFilter(object):
                 feat = np.hstack((feat, data))
                 
         return feat
+    
+    def layers_ripartition(self):
+        
+        assert isinstance(self.layers_list, list)
+        
+        layers_ripartition_list = []
+        
+        for i in xrange(len(self.layers_list)):
+            sub_sf = SparseFilter(layers_list=self.layers_list[:i+1])
+            layers_ripartition_list.append(sub_sf)
+            
+        return layers_ripartition_list
+    
+    def get_layers_counter(self):
+        
+        return self.n_layers
+    
+    def get_features_counter(self):
+        
+        return self.n_features
