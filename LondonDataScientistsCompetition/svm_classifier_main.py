@@ -89,6 +89,7 @@ def parse_option():
                                                           "sparse-filtering",
                                                           "save-sf-features=",
                                                           "load-sf-features=",
+							  "n-layers-sf=",
                                                           "n-iterations-sf=",
                                                           "n-features-sf=",
                                                           "rf-features-selection", #random forests features selection
@@ -307,12 +308,28 @@ def parse_option():
             try:
                 params_dict["n_features_sf"] = int(a)
             except Exception as e:
-                print "Error while converint --n-features-fs={0} to int. Exception: {1}".format(a,e)
+                print "Error while converting --n-features-fs={0} to int. Exception: {1}".format(a,e)
                 sys.exit(2)
                 
             if not 0<params_dict["n_features_sf"]<=100000:
                 print "Error: --n-features-sf has to be greater than 0 and smaller than 100000."
                 sys.exit(2)
+
+	    try:
+                params_dict["n_layers_sf"] = int(a)
+            except Exception as e:
+                print "Error while converting --n-layers-fs={0} to int. Exception: {1}".format(a,e)
+                sys.exit(2)
+                
+            if not 0<params_dict["n_layers_sf"]<=100:
+                print "Error: --n-layers-sf has to be greater than 0 and smaller than 100."
+                sys.exit(2)
+
+	elif o == "--n-layers-sf":
+
+            if not "--n-layers-sf" in options_list:
+		print "--n-layers-sf specified even if --sparse-filtering is not enabled."
+		sys.exit(2)	
                 
         elif o == "--rf-features-selection":
             
@@ -489,6 +506,7 @@ def parse_option():
             print "--sparse-filtering: this flag enables sparse filtering for strong features generation.\n"
             print "--n-iterations-sf : this allows to specify the number of iteration for sparse filtering optimization. By default 1000. It has to be specified when --sparse-filtering is enabled.\n"
             print "--n-features-sf : this allows to specify the number of features for sparse filtering. By default 50. It has to be specified when --sparse-filtering is enabled.\n"
+            print "--n-layers-sf : this allows to specify the number of layers trained as greedy layer-wise network with sparse filtering. By default 50. It has to be specified when --sparse-filtering is enabled.\n"
             print "--save-sf-features: since sparse filtering is time consuming, it is possible to save the calculated features and re-load them in the nexts run. It has to specified with --sparse filtering enabled.\n"
             print "--load-sf-features: since sparse filtering is time consuming, it is possible to load pre-calculated features. It has to specified with --sparse filtering enabled.\n"
             print "--rf-features-selection: this flag enables strong features selection by means of random forests.\n"
@@ -564,6 +582,9 @@ def parse_option():
         
     if not params_dict.has_key("n_features_sf"):
         params_dict["n_features_sf"] = 50
+
+    if not params_dict.has_key("n_layers_sf"):
+	params_dict["n_layers_sf"] = 1
         
     if not params_dict.has_key("load_sf_flag"):
         params_dict["load_sf_flag"] = False
@@ -634,7 +655,7 @@ def main():
         if params_dict["load_sf_flag"]:
             sf, train_sf, test_sf = load_sf_features(params_dict["load_sf_path"])
         else:
-            sf = SparseFilter(n_layers=2,n_features=params_dict["n_features_sf"], n_iterations=params_dict["n_iterations_sf"])
+            sf = SparseFilter(n_layers=params_dict["n_layers_sf"],n_features=params_dict["n_features_sf"], n_iterations=params_dict["n_iterations_sf"])
             sf.fit(np.r_[train,test])
             train_sf = sf.transform(train)
             test_sf = sf.transform(test)

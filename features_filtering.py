@@ -27,7 +27,7 @@ class FeaturesSelectionRandomForests(object):
             self.feature_importance_th = feature_importance_th
         
         #filter features by forest model
-        self.trees = ExtraTreesClassifier(n_estimators=100)
+        self.trees = ExtraTreesClassifier(n_estimators=100, compute_importances=True)
         self.trees.fit(X, y)
         self.features_mask = np.where(self.trees.feature_importances_ > 0.005)[0]
 

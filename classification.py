@@ -94,7 +94,7 @@ class ModelSelection(object):
         recall_by_C=np.zeros(len(C_list),dtype=np.float)
         f1_by_C=np.zeros(len(C_list),dtype=np.float)
         
-        set_ripartitions = StratifiedShuffleSplit(y, n_iter = n_iterations, 
+        set_ripartitions = StratifiedShuffleSplit(y, n_iterations = n_iterations, 
                                                   test_size = test_size, indices = False)
                 
         n_iter=len(set_ripartitions)
@@ -162,7 +162,7 @@ class ModelSelection(object):
         recall_by_C_and_gamma=np.zeros((len(self.C_list),len(self.gamma_list)), dtype=np.float)
         f1_by_C_and_gamma=np.zeros((len(self.C_list),len(self.gamma_list)), dtype=np.float)
         
-        set_ripartitions = StratifiedShuffleSplit(y, n_iter = n_iterations, 
+        set_ripartitions = StratifiedShuffleSplit(y, n_iterations = n_iterations, 
                                                   test_size = test_size, indices=False)
     
         n_iter=len(set_ripartitions)
@@ -276,7 +276,7 @@ class RecursiveFeaturesElimination(object):
             
             extracted_X = np.reshape(extracted_X,(num_samples,i+1))
             
-            set_ripartitions = StratifiedShuffleSplit(y, n_iter = self.n_iterations, 
+            set_ripartitions = StratifiedShuffleSplit(y, n_iterations = self.n_iterations, 
                                                   test_size = self.test_size, indices=False)
     
             n_iter = len(set_ripartitions)
@@ -548,7 +548,7 @@ class SVM(object):
         
         assert isinstance(C,(int,float))
         
-        set_ripartitions = StratifiedShuffleSplit(y, n_iter = n_iterations, 
+        set_ripartitions = StratifiedShuffleSplit(y, n_iterations = n_iterations, 
                                                   test_size = test_size, indices = False)
         
         if kernel == SVM_linear:
