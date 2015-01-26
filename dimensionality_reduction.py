@@ -1,3 +1,4 @@
+
 '''
 Created on Dec 25, 2013
 
@@ -33,7 +34,7 @@ class PCA(object):
         else:
             U,eigen_values,eigen_vectors = np.linalg.svd(data,full_matrices=False)
             eigen_vectors=eigen_vectors.T
-            
+                
         return eigen_vectors, eigen_values.cumsum(axis=0)/eigen_values.sum()
     
     
@@ -65,5 +66,5 @@ class PCA(object):
             self.pca_coeffs = self.decorrelated_coeffs[mask].reshape(dim,-1)
         else:
             self.pca_coeffs = self.decorrelated_coeffs[:,:self.num_components]
-            
+        
         return self.pca_coeffs

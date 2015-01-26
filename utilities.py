@@ -10,6 +10,33 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 import os
+import pandas
+
+
+def print_model_selection_results(results, C_list, gamma_list = None ):
+    
+    #if gamma list is None we expect a SVM linear classifier
+    if gamma_list is None:
+        rbf = False
+        assert results.ndim == 1
+    else:
+        rbf = True
+        assert results.ndim == 2
+        
+    C_list_indeces = []
+    for C in C_list:
+        C_list_indeces.append("C = {0}".format(C))
+
+    if rbf:
+        gamma_list_columns = []
+        for gamma in gamma_list:
+            gamma_list_columns.append("gamma = {0}".format(gamma))
+            
+    if not rbf:
+        return pandas.DataFrame(results, index = C_list_indeces)
+    else:
+        return pandas.DataFrame(results, index = C_list_indeces, columns = gamma_list_columns)        
+    
 
 def plot_features(X):
     

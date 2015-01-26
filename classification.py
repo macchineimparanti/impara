@@ -9,6 +9,7 @@ from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import classification_report
 from sklearn.svm import SVC, LinearSVC
 from sklearn import metrics
+from sklearn.metrics.pairwise import chi2_kernel
 from sklearn import preprocessing
 from sklearn.cross_validation import StratifiedShuffleSplit
 from sklearn.feature_selection import RFECV
@@ -17,7 +18,20 @@ import numpy as np
 
 SVM_RBF = 0
 SVM_linear = 1
+SVM_RBF_Chi2_squared = 2
 
+def classes_balance(labels):
+    
+    num_labels = int(np.max(labels)) + 1
+    
+    tot = float(labels.shape[0])
+    parts = []
+    for i in xrange(num_labels):
+        part = np.sum((labels == i).astype(np.int))
+        parts.append(part/tot)
+        
+    return parts
+        
 
 def dataset_scaling(X):
     
@@ -45,7 +59,7 @@ def mse_errors(classifier,X_tr,y_tr,X_cv,y_cv):
 
 
 def misclassification_errors(classifier, X_tr, y_tr, X_cv, y_cv):
-    
+        
     predicted_tr = classifier.predict(X_tr)
     predicted_cv = classifier.predict(X_cv)
     
@@ -140,13 +154,12 @@ class ModelSelection(object):
                 result["f1_by_C"]=f1_by_C
         
         return result
-    
-    
+
     
     def C_gamma_selection(self,X, y, classifier_by_C_and_gamma_function, 
                           error_measure_function, C_list = None, gamma_list = None,
                           classifier_by_C_function_params = None, 
-                          test_size = 0.3, n_iterations = 20 ):
+                          test_size = 0.3, n_iterations = 20):
         
         if C_list is not None:
             self.C_list = C_list
@@ -216,6 +229,67 @@ class ModelSelection(object):
         return result
             
             
+    def gamma_selection(self,X,y,gamma_list, 
+                    classifier_by_gamma_function, error_measure_function,
+                    classifier_by_gamma_function_params = None, 
+                    test_size = 0.3, n_iterations = 20 ):
+                    
+        tr_err_by_gamma=np.zeros(len(gamma_list),dtype=np.float)
+        cv_err_by_gamma=np.zeros(len(gamma_list),dtype=np.float)
+        
+        acc_by_gamma=np.zeros(len(gamma_list),dtype=np.float)
+        prec_by_gamma=np.zeros(len(gamma_list),dtype=np.float)
+        recall_by_gamma=np.zeros(len(gamma_list),dtype=np.float)
+        f1_by_gamma=np.zeros(len(gamma_list),dtype=np.float)
+        
+        set_ripartitions = StratifiedShuffleSplit(y, n_iterations = n_iterations, 
+                                                  test_size = test_size, indices = False)
+                
+        n_iter=len(set_ripartitions)
+        for train,test in set_ripartitions:
+            X_tr,X_cv,y_tr,y_cv =X[train],X[test],y[train],y[test]
+            
+            idx_gamma=0
+            for gamma in gamma_list:
+                
+                classifier = classifier_by_gamma_function(X_tr, y_tr,gamma=gamma)
+                          
+                tr_err, cv_err = error_measure_function(classifier,X_tr,y_tr,X_cv,y_cv)
+                
+                tr_err_by_gamma[idx_gamma]=tr_err_by_gamma[idx_gamma]+tr_err/n_iter
+                cv_err_by_gamma[idx_gamma]=cv_err_by_gamma[idx_gamma]+cv_err/n_iter
+                
+                #it is assumed that we are dealing with a sklearn classifier...
+                y_pred = classifier.predict(X_cv)
+
+                if hasattr(metrics,"accuracy_score"):
+                    acc = metrics.accuracy_score(y_cv,y_pred)
+                else:
+                    assert hasattr(metrics,"zero_one_score")
+                    acc = metrics.zero_one_score(y_cv, y_pred)
+                prec=metrics.precision_score(y_cv,y_pred)
+                recall=metrics.recall_score(y_cv,y_pred)
+                f1_score=metrics.f1_score(y_cv,y_pred)
+                
+                acc_by_gamma[idx_gamma] = acc_by_gamma[idx_gamma] + acc/n_iter
+                prec_by_gamma[idx_gamma] = prec_by_gamma[idx_gamma] + prec/n_iter
+                recall_by_gamma[idx_gamma] = recall_by_gamma[idx_gamma] + recall/n_iter
+                f1_by_gamma[idx_gamma] = f1_by_gamma[idx_gamma] + f1_score/n_iter
+                
+                idx_gamma+=1
+                
+                result=dict()
+                result["gamma_list"]=gamma_list
+                result["tr_err_by_gamma"]=tr_err_by_gamma
+                result["cv_err_by_gamma"]=cv_err_by_gamma
+                result["acc_by_gamma"]=acc_by_gamma
+                result["prec_by_gamma"]=prec_by_gamma
+                result["recall_by_gamma"]=recall_by_gamma
+                result["f1_by_gamma"]=f1_by_gamma
+        
+        return result
+            
+            
 def SVM_RBF_by_C_and_gamma_function(X,y,C,gamma):
     
     classifier = SVC(kernel="rbf",C=C,gamma=gamma)
@@ -230,18 +304,26 @@ def linear_SVM_by_C_function(X,y,C):
     classifier.fit(X,y)
        
     return classifier
+
+
+def SVM_RBF_Chi2_squared_by_C_function(X,y,C):
+        
+    classifier = SVC(kernel=chi2_kernel, C = C)
+    classifier.fit(X,y)
+    
+    return classifier
     
     
 class RecursiveFeaturesElimination(object):
     
     
-    def __init__(self, C, gamma = None, kernel = SVM_RBF, test_size = 0.3, n_iterations = 10 ):
-    
-        assert isinstance(C, (int,long,float))
-    
-        self.C = C
+    def __init__(self, C = None, gamma = None, kernel = SVM_RBF, test_size = 0.3, n_iterations = 10 ):
         
-        if not kernel == SVM_RBF and not kernel == SVM_linear:
+        if kernel == SVM_RBF or kernel == SVM_linear or kernel == SVM_RBF_Chi2_squared:
+            assert isinstance(C,(int,long,float))
+            self.C = C
+        
+        if not kernel == SVM_RBF and not kernel == SVM_linear and not kernel == SVM_RBF_Chi2_squared:
             raise Exception("Classification type not supported!")
         
         if kernel == SVM_RBF:
@@ -294,7 +376,12 @@ class RecursiveFeaturesElimination(object):
                     
                     classifier = linear_SVM_by_C_function(X_tr, y_tr, C=self.C)      
                     tr_err, cv_err = misclassification_errors(classifier,X_tr,y_tr,X_cv,y_cv)
-                                
+                
+                elif self.kernel == SVM_RBF_Chi2_squared:
+                       
+                    classifier = SVM_RBF_Chi2_squared_by_C_function(X_tr, y_tr, C = self.C)
+                    tr_err, cv_err = misclassification_errors(classifier,X_tr,y_tr,X_cv,y_cv)
+                    
                 y_pred=classifier.predict(X_cv)
                 
                 if hasattr(metrics,"accuracy_score"):
@@ -341,13 +428,22 @@ class RecursiveFeaturesElimination(object):
 class SVM(object):
        
     
+    def __init__(self, kernel = None):
+        
+        if kernel == SVM_linear or kernel == SVM_RBF_Chi2_squared or kernel == SVM_RBF:
+            self.kernel = kernel
+    
+    
     def model_selection(self,X,y,kernel=SVM_RBF, C_list = None, gamma_list = None, test_size = 0.3, n_iterations = 20,
                         show_accuracy_flag = True, show_precision_flag = True, show_recall_flag = True,
                         show_f1_score_flag = True):
         
         assert X!=None and y!=None     
         assert len(X)==len(y)
-        assert kernel==SVM_RBF or kernel==SVM_linear
+        assert kernel==SVM_RBF or kernel==SVM_linear or kernel == SVM_RBF_Chi2_squared
+        
+        if not hasattr(self,"kernel"):
+            self.kernel = kernel
             
         if kernel==SVM_linear:
         
@@ -355,6 +451,11 @@ class SVM(object):
             parameters_result = model_selection.C_selection(X, y, C_list, classifier_by_C_function = linear_SVM_by_C_function, 
                                         error_measure_function = misclassification_errors, 
                                         test_size = test_size, n_iterations = n_iterations)
+        
+            self.print_linear_SVM_results(parameters_result, show_accuracy_flag = show_accuracy_flag, 
+                                          show_precision_flag = show_precision_flag, 
+                                          show_recall_flag = show_recall_flag, 
+                                          show_f1_score_flag = show_f1_score_flag)
         
         elif kernel==SVM_RBF:
             
@@ -365,6 +466,19 @@ class SVM(object):
                                                                   test_size = 0.3, n_iterations = n_iterations)
             
             self.print_SVM_RBF_results(parameters_result, show_accuracy_flag = show_accuracy_flag, 
+                                       show_precision_flag = show_precision_flag, 
+                                       show_recall_flag = show_recall_flag, 
+                                       show_f1_score_flag = show_f1_score_flag )
+            
+        elif self.kernel == SVM_RBF_Chi2_squared:
+            
+            model_selection = ModelSelection(C_list = C_list)
+            parameters_result = model_selection.C_selection(X, y, C_list,
+                                                                classifier_by_C_function = SVM_RBF_Chi2_squared_by_C_function, 
+                                                                error_measure_function = misclassification_errors, 
+                                                                test_size = 0.3, n_iterations = n_iterations)
+            
+            self.print_linear_SVM_results(parameters_result, show_accuracy_flag = show_accuracy_flag, 
                                        show_precision_flag = show_precision_flag, 
                                        show_recall_flag = show_recall_flag, 
                                        show_f1_score_flag = show_f1_score_flag )
@@ -409,6 +523,104 @@ class SVM(object):
         assert gamma_max is not None
         
         return C_max, gamma_max, acc_max
+    
+    
+    def best_accuracy_gamma(self, parameters_result):
+    
+        gamma_max = None
+        acc_max = 0
+                    
+        for gamma_cur in xrange(len(parameters_result["gamma_list"])):
+            gamma_ = parameters_result["gamma_list"][gamma_cur]
+            acc = parameters_result["acc_by_C"][gamma_cur]
+            if acc>acc_max:
+                acc_max = acc
+                gamma_max = gamma_
+                    
+        assert gamma_max is not None
+
+        return gamma_max, acc_max
+    
+    
+    def print_linear_SVM_results(self, parameters_result, show_accuracy_flag = True, 
+                              show_precision_flag = True, show_recall_flag = True,
+                              show_f1_score_flag = True):
+    
+        if show_accuracy_flag:
+    
+            C_max = None
+            acc_max = 0
+            
+            print "\nAccuracy results:"
+            
+            for C_cur in xrange(len(parameters_result["C_list"])):
+                C_ = parameters_result["C_list"][C_cur]
+                acc = parameters_result["acc_by_C"][C_cur]
+                print "C = {0}, accuracy = {1}".format(C_,acc)
+                if acc>acc_max:
+                    acc_max = acc
+                    C_max = C_
+                        
+            assert C_max is not None
+                        
+            print "Optimal C = {0}. Accuracy: {1}.".format(C_max, acc_max)
+        
+        if show_precision_flag:
+        
+            C_max = None
+            prec_max = 0
+            
+            print "\nPrecision results:"
+            
+            for C_cur in xrange(len(parameters_result["C_list"])):
+                C_ = parameters_result["C_list"][C_cur]
+                prec = parameters_result["prec_by_C"][C_cur]
+                print "C = {0}, precision = {1}".format(C_,prec)
+                if prec>prec_max:
+                    prec_max = prec
+                    C_max = C_
+                   
+            assert C_max is not None
+                         
+            print "Optimal C = {0}. Precision: {1}.".format(C_max, prec_max)
+        
+        if show_recall_flag:
+        
+            C_max = None
+            rec_max = 0
+            
+            print "\nRecall results:"
+            
+            for C_cur in xrange(len(parameters_result["C_list"])):
+                C_ = parameters_result["C_list"][C_cur]
+                rec = parameters_result["recall_by_C"][C_cur]
+                print "C = {0}, recall = {1}".format(C_, rec)
+                if rec>rec_max:
+                    rec_max = rec
+                    C_max = C_
+                    
+            assert C_max is not None
+                        
+            print "Optimal C = {0}. Recall: {1}.".format(C_max, rec_max)
+        
+        if show_f1_score_flag:
+        
+            C_max = None
+            f1_max = 0
+            
+            print "\nf1 score results:"
+            
+            for C_cur in xrange(len(parameters_result["C_list"])):
+                C_ = parameters_result["C_list"][C_cur]
+                f1 = parameters_result["f1_by_C"][C_cur]
+                print "C = {0}, f1 = {1}".format(C_,f1)
+                if f1>f1_max:
+                    f1_max = f1
+                    C_max = C_
+                        
+            assert C_max is not None
+                        
+            print "Optimal C = {0}. f1 score: {1}.".format(C_max, f1_max)
     
     
     def print_SVM_RBF_results(self, parameters_result, show_accuracy_flag = True, 
@@ -511,18 +723,29 @@ class SVM(object):
                         
             print "Optimal C = {0} and gamma = {1}. f1 score: {2}.".format(C_max, gamma_max, f1_max)
     
+    
+    def print_SVM_RBF_Chi2_squared_results(self, parameters_result, show_accuracy_flag = True, 
+                              show_precision_flag = True, show_recall_flag = True,
+                              show_f1_score_flag = True):
+    
+        self.print_linear_SVM_results(parameters_result, show_accuracy_flag, show_precision_flag, show_recall_flag, show_f1_score_flag)
+    
+    
     # return tr_err_rfe, cv_err_rfe,accuracy_rfe,recall_rfe, precision_rfe, f1_score_rfe
-    def recursive_features_elimination_curves(self, X, y, C, gamma = None, kernel=SVM_RBF, n_iterations = 10, test_size = 0.3):
+    def recursive_features_elimination_curves(self, X, y, C = None, gamma = None, kernel=SVM_RBF, n_iterations = 10, test_size = 0.3):
         
-         rfe = RecursiveFeaturesElimination(C=C,gamma=gamma,kernel=kernel,
+        rfe = RecursiveFeaturesElimination(C=C,gamma=gamma,kernel=kernel,
                                             n_iterations=n_iterations,
                                             test_size=test_size)
-         return rfe.rfe_curves(X, y)
+        return rfe.rfe_curves(X, y)
     
     
-    def training(self,X,y,kernel=SVM_RBF,C=1,gamma=None):
+    def training(self,X,y,kernel=SVM_RBF,C=None,gamma=None):
         
         assert isinstance(C,(int,float))
+        
+        if not hasattr(self,"kernel"):
+            self.kernel = kernel
         
         if kernel == SVM_RBF:
             assert isinstance(gamma,(int,float))
@@ -531,20 +754,23 @@ class SVM(object):
         elif kernel == SVM_linear:
             self.classifier = LinearSVC(C=C)
             self.classifier.fit(X,y)
+        elif kernel == SVM_RBF_Chi2_squared:
+            self.classifier = SVC(kernel=chi2_kernel,C=C)
+            self.classifier.fit(X,y)
         else:
             raise Exception("Classification kernel not supported!")
 
         return self.classifier
         
     
-    def classify(self,X):
+    def classify(self, X):
         
         assert hasattr(self,"classifier")
-        
+                
         return self.classifier.predict(X)
     
     
-    def performance_estimation(self, X, y, kernel = SVM_RBF, C = None, gamma = None, n_iterations = 20, test_size = 0.3):
+    def performance_estimation(self, X, y, kernel = SVM_RBF, C = 1.0, gamma = None, n_iterations = 20, test_size = 0.3):
         
         assert isinstance(C,(int,float))
         
@@ -556,7 +782,9 @@ class SVM(object):
         elif kernel == SVM_RBF:
             assert isinstance(gamma,(int,float))
             classifier = SVC(kernel="rbf", C=C, gamma=gamma)
-        
+        elif kernel == SVM_RBF_Chi2_squared:
+            classifier = SVC(kernel=chi2_kernel,C=C)
+            
         accuracy_avg = 0.0
         precision_avg = 0.0
         recall_avg = 0.0
