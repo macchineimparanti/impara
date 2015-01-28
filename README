@@ -9,6 +9,21 @@ All these settings can be managed by specifying them in a configuration file. Ty
 
 First release. v0.1
 
+Dependencies:
+
+Python
+numpy
+matplotlib
+scikit-learn
+panda
+scipy
+
+If you want to use sparse filtering features:
+
+Theano
+PyAutoDiff (https://github.com/LowinData/pyautodiff/tree/python2-ast)
+meta (https://github.com/numba/meta)
+
 Examples of usage:
 
 First, add in the python path the path of the library. 
