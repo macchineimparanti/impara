@@ -120,7 +120,12 @@ from datetime import date
 import matplotlib.pyplot as plt
 from dimensionality_reduction import PCA
 from features_preprocessing import Scaler
-from sparse_filtering import SparseFilter
+try:
+    from sparse_filtering import SparseFilter
+    sparse_filtering_available = True
+except Exception as e:
+    sparse_filtering_available = False
+    sparse_filtering_import_exc = str(e)
 from features_filtering import FeaturesSelectionRandomForests
 from classification import SVM, dataset_scaling, RecursiveFeaturesElimination, SVM_RBF, SVM_linear, SVM_RBF_Chi2_squared, classes_balance
 from utilities import plot_3d, plot_2d, save_csv_submitted_labels, plot_features, plot_rfe_curve, load_sf_features, save_sf_features, print_model_selection_results
@@ -341,6 +346,10 @@ Example of script_params.json (you cannot keep comments in the deployed one):
         params_dict["sparse_filtering_flag"] = False
     
     if params_dict["sparse_filtering_flag"]:
+        
+        if not sparse_filtering_available:
+            print "Sparse filtering enabled. Error while importing the sparse filtering module: %s."%sparse_filtering_import_exc
+            sys.exit(2)
         
         if not params_dict.has_key("n_iterations_sf"):
             params_dict["n_iterations_sf"] = 1000 
