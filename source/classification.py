@@ -14,7 +14,11 @@ from sklearn import preprocessing
 from sklearn.cross_validation import StratifiedShuffleSplit
 from sklearn.feature_selection import RFECV
 import numpy as np
+from joblib import Parallel, delayed
+import os
+from multiprocessing import cpu_count
 
+os.system("taskset -p 0xff %d" % os.getpid())
 
 SVM_RBF = 0
 SVM_linear = 1
@@ -70,7 +74,49 @@ def misclassification_errors(classifier, X_tr, y_tr, X_cv, y_cv):
     cv_err=np.float(np.sum(misclassified_cv.astype("float")))/len(misclassified_cv)
         
     return tr_err, cv_err
-            
+     
+def C_and_gamma_evaluation(X_tr, y_tr, X_cv, y_cv, classifier_by_C_and_gamma_function, 
+                          error_measure_function, C, idx_C, gamma, idx_gamma):
+    
+    classifier = classifier_by_C_and_gamma_function(X_tr, y_tr, C=C, gamma=gamma)
+                      
+    tr_err, cv_err = error_measure_function(classifier,X_tr,y_tr,X_cv,y_cv)
+                
+    y_pred=classifier.predict(X_cv)
+
+    if hasattr(metrics,"accuracy_score"):
+        acc = metrics.accuracy_score(y_cv,y_pred)
+    else:
+        assert hasattr(metrics,"zero_one_score")
+        acc = metrics.zero_one_score(y_cv, y_pred)
+    prec=metrics.precision_score(y_cv,y_pred)
+    recall=metrics.recall_score(y_cv,y_pred)
+    f1_score=metrics.f1_score(y_cv,y_pred)
+
+    return idx_C, idx_gamma, tr_err, cv_err, acc, prec, recall, f1_score
+
+
+def C_evaluation(X_tr, y_tr, X_cv, y_cv, classifier_by_C_function, 
+                          error_measure_function, C, idx_C):
+    
+    classifier = classifier_by_C_function(X_tr, y_tr,C=C)
+                          
+    tr_err, cv_err = error_measure_function(classifier,X_tr,y_tr,X_cv,y_cv)
+    
+    #it is assumed that we are dealing with a sklearn classifier...
+    y_pred = classifier.predict(X_cv)
+
+    if hasattr(metrics,"accuracy_score"):
+        acc = metrics.accuracy_score(y_cv,y_pred)
+    else:
+        assert hasattr(metrics,"zero_one_score")
+        acc = metrics.zero_one_score(y_cv, y_pred)
+    prec=metrics.precision_score(y_cv,y_pred)
+    recall=metrics.recall_score(y_cv,y_pred)
+    f1_score=metrics.f1_score(y_cv,y_pred)
+    
+    return idx_C, tr_err, cv_err, acc, prec, recall, f1_score
+
 
 class ModelSelection(object):
     
@@ -98,68 +144,54 @@ class ModelSelection(object):
     def C_selection(self,X,y,C_list, 
                     classifier_by_C_function, error_measure_function,
                     classifier_by_C_function_params = None, 
-                    test_size = 0.3, n_iterations = 20 ):
-                    
-        tr_err_by_C=np.zeros(len(C_list),dtype=np.float)
-        cv_err_by_C=np.zeros(len(C_list),dtype=np.float)
+                    test_size = 0.3, n_iterations = 20, max_num_cpus = -1 ):
         
-        acc_by_C=np.zeros(len(C_list),dtype=np.float)
-        prec_by_C=np.zeros(len(C_list),dtype=np.float)
-        recall_by_C=np.zeros(len(C_list),dtype=np.float)
-        f1_by_C=np.zeros(len(C_list),dtype=np.float)
+        if C_list is not None:
+            self.C_list = C_list
         
-        set_ripartitions = StratifiedShuffleSplit(y, n_iterations = n_iterations, 
+        results_dict = dict()
+        
+        results_dict["C_list"] = self.C_list
+        
+        results_dict["tr_err_by_C"] = np.zeros(len(self.C_list),dtype=np.float)
+        results_dict["cv_err_by_C"] =np.zeros(len(self.C_list),dtype=np.float)
+        results_dict["acc_by_C"] = np.zeros(len(self.C_list),dtype=np.float)
+        results_dict["prec_by_C"] = np.zeros(len(self.C_list),dtype=np.float)
+        results_dict["recall_by_C"] = np.zeros(len(self.C_list),dtype=np.float)
+        results_dict["f1_by_C"] = np.zeros(len(self.C_list),dtype=np.float)
+        
+        params = zip( range(len(self.C_list)), self.C_list )
+        
+        set_ripartitions = StratifiedShuffleSplit(y, n_iter = n_iterations, 
                                                   test_size = test_size, indices = False)
+                
+        if max_num_cpus < 0:
+            num_processes = cpu_count()
+        else:
+            num_processes = min(cpu_count(),max_num_cpus)
                 
         n_iter=len(set_ripartitions)
         for train,test in set_ripartitions:
             X_tr,X_cv,y_tr,y_cv =X[train],X[test],y[train],y[test]
             
-            idx_C=0
-            for C in C_list:
-                
-                classifier = classifier_by_C_function(X_tr, y_tr,C=C)
-                          
-                tr_err, cv_err = error_measure_function(classifier,X_tr,y_tr,X_cv,y_cv)
-                
-                tr_err_by_C[idx_C]=tr_err_by_C[idx_C]+tr_err/n_iter
-                cv_err_by_C[idx_C]=cv_err_by_C[idx_C]+cv_err/n_iter
-                
-                #it is assumed that we are dealing with a sklearn classifier...
-                y_pred = classifier.predict(X_cv)
-
-                if hasattr(metrics,"accuracy_score"):
-                    acc = metrics.accuracy_score(y_cv,y_pred)
-                else:
-                    assert hasattr(metrics,"zero_one_score")
-                    acc = metrics.zero_one_score(y_cv, y_pred)
-                prec=metrics.precision_score(y_cv,y_pred)
-                recall=metrics.recall_score(y_cv,y_pred)
-                f1_score=metrics.f1_score(y_cv,y_pred)
-                
-                acc_by_C[idx_C] = acc_by_C[idx_C] + acc/n_iter
-                prec_by_C[idx_C] = prec_by_C[idx_C] + prec/n_iter
-                recall_by_C[idx_C] = recall_by_C[idx_C] + recall/n_iter
-                f1_by_C[idx_C] = f1_by_C[idx_C] + f1_score/n_iter
-                
-                idx_C+=1
-                
-                result=dict()
-                result["C_list"]=C_list
-                result["tr_err_by_C"]=tr_err_by_C
-                result["cv_err_by_C"]=cv_err_by_C
-                result["acc_by_C"]=acc_by_C
-                result["prec_by_C"]=prec_by_C
-                result["recall_by_C"]=recall_by_C
-                result["f1_by_C"]=f1_by_C
+            results = Parallel(n_jobs=num_processes)(delayed(C_evaluation)(X_tr,y_tr,X_cv,y_cv,classifier_by_C_function, 
+                          error_measure_function, C, idx_C) for idx_C, C in params)
+            
+            for idx_C, tr_err, cv_err, acc, prec, recall, f1_score in results:
+                results_dict["tr_err_by_C"][idx_C] = results_dict["tr_err_by_C"][idx_C]+tr_err/n_iter
+                results_dict["cv_err_by_C"][idx_C] = results_dict["cv_err_by_C"][idx_C]+cv_err/n_iter
+                results_dict["acc_by_C"][idx_C] = results_dict["acc_by_C"][idx_C] + acc/n_iter
+                results_dict["prec_by_C"][idx_C] = results_dict["prec_by_C"][idx_C] + prec/n_iter
+                results_dict["recall_by_C"][idx_C] = results_dict["recall_by_C"][idx_C] + recall/n_iter
+                results_dict["f1_by_C"][idx_C] = results_dict["f1_by_C"][idx_C] + f1_score/n_iter
         
-        return result
+        return results_dict
 
     
     def C_gamma_selection(self,X, y, classifier_by_C_and_gamma_function, 
                           error_measure_function, C_list = None, gamma_list = None,
                           classifier_by_C_function_params = None, 
-                          test_size = 0.3, n_iterations = 20):
+                          test_size = 0.3, n_iterations = 20, max_num_cpus = -1):
         
         if C_list is not None:
             self.C_list = C_list
@@ -167,128 +199,53 @@ class ModelSelection(object):
         if gamma_list is not None:
             self.gamma_list = gamma_list
         
-        tr_err_by_C_and_gamma=np.zeros((len(self.C_list),len(self.gamma_list)), dtype=np.float)
-        cv_err_by_C_and_gamma=np.zeros((len(self.C_list),len(self.gamma_list)), dtype=np.float)
+        results_dict = dict()
         
-        acc_by_C_and_gamma=np.zeros((len(self.C_list),len(self.gamma_list)),dtype=np.float)
-        prec_by_C_and_gamma=np.zeros((len(self.C_list),len(self.gamma_list)), dtype=np.float)
-        recall_by_C_and_gamma=np.zeros((len(self.C_list),len(self.gamma_list)), dtype=np.float)
-        f1_by_C_and_gamma=np.zeros((len(self.C_list),len(self.gamma_list)), dtype=np.float)
+        results_dict["C_list"]=self.C_list
+        results_dict["gamma_list"]=self.gamma_list
         
-        set_ripartitions = StratifiedShuffleSplit(y, n_iterations = n_iterations, 
+        results_dict["tr_err_by_C_and_gamma"]=np.zeros((len(self.C_list),len(self.gamma_list)), dtype=np.float)
+        results_dict["cv_err_by_C_and_gamma"]=np.zeros((len(self.C_list),len(self.gamma_list)), dtype=np.float)
+        
+        results_dict["acc_by_C_and_gamma"]=np.zeros((len(self.C_list),len(self.gamma_list)),dtype=np.float)
+        results_dict["prec_by_C_and_gamma"]=np.zeros((len(self.C_list),len(self.gamma_list)), dtype=np.float)
+        results_dict["recall_by_C_and_gamma"]=np.zeros((len(self.C_list),len(self.gamma_list)), dtype=np.float)
+        results_dict["f1_by_C_and_gamma"]=np.zeros((len(self.C_list),len(self.gamma_list)), dtype=np.float)
+        
+        set_ripartitions = StratifiedShuffleSplit(y, n_iter = n_iterations, 
                                                   test_size = test_size, indices=False)
+    
+        if max_num_cpus < 0:
+            num_processes = cpu_count()
+        else:
+            num_processes = min(cpu_count(),max_num_cpus)
     
         n_iter=len(set_ripartitions)
         
+        enumerated_C_list = zip( range(len(self.C_list)), self.C_list )
+        enumerated_gamma_list = zip( range(len(self.gamma_list)), self.gamma_list )
+        params = []
+        for C_item in enumerated_C_list:
+            for gamma_item in enumerated_gamma_list:
+                params.append((C_item,gamma_item))
+        
         for train,test in set_ripartitions:
-            X_tr,X_cv,y_tr,y_cv =X[train],X[test],y[train],y[test]
             
-            index_C=0
-            for C in self.C_list:
-                
-                idx_gamma=0
-                for gamma in self.gamma_list:
-                
-                    classifier = classifier_by_C_and_gamma_function(X_tr, y_tr, C=C, gamma=gamma)
-                          
-                    tr_err, cv_err = error_measure_function(classifier,X_tr,y_tr,X_cv,y_cv)
-                                
-                    tr_err_by_C_and_gamma[index_C, idx_gamma]=tr_err_by_C_and_gamma[index_C, idx_gamma]+tr_err/n_iter
-                    cv_err_by_C_and_gamma[index_C, idx_gamma]=cv_err_by_C_and_gamma[index_C, idx_gamma]+cv_err/n_iter
-                
-                    y_pred=classifier.predict(X_cv)
-                
-                    if hasattr(metrics,"accuracy_score"):
-                        acc = metrics.accuracy_score(y_cv,y_pred)
-                    else:
-                        assert hasattr(metrics,"zero_one_score")
-                        acc = metrics.zero_one_score(y_cv, y_pred)
-                    prec=metrics.precision_score(y_cv,y_pred)
-                    recall=metrics.recall_score(y_cv,y_pred)
-                    f1_score=metrics.f1_score(y_cv,y_pred)
-                
-                    acc_by_C_and_gamma[index_C, idx_gamma] = acc_by_C_and_gamma[index_C, idx_gamma] + acc/n_iter
-                    prec_by_C_and_gamma[index_C, idx_gamma]=prec_by_C_and_gamma[index_C, idx_gamma]+prec/n_iter
-                    recall_by_C_and_gamma[index_C, idx_gamma]=recall_by_C_and_gamma[index_C, idx_gamma]+recall/n_iter
-                    f1_by_C_and_gamma[index_C, idx_gamma]=f1_by_C_and_gamma[index_C, idx_gamma]+f1_score/n_iter
+            X_tr,X_cv,y_tr,y_cv =X[train],X[test],y[train],y[test]          
+            
+            results = Parallel(n_jobs=num_processes)(delayed(C_and_gamma_evaluation)(X_tr,y_tr,X_cv,y_cv,classifier_by_C_and_gamma_function, 
+                          error_measure_function, C, idx_C, gamma, idx_gamma) for (idx_C, C),(idx_gamma, gamma) in params)
+            
+            for idx_C, idx_gamma, tr_err, cv_err, acc, prec, recall, f1_score in results:
+                results_dict["tr_err_by_C_and_gamma"][idx_C, idx_gamma]=results_dict["tr_err_by_C_and_gamma"][idx_C, idx_gamma]+tr_err/n_iter
+                results_dict["cv_err_by_C_and_gamma"][idx_C, idx_gamma]=results_dict["cv_err_by_C_and_gamma"][idx_C, idx_gamma]+cv_err/n_iter
+                results_dict["acc_by_C_and_gamma"][idx_C, idx_gamma] = results_dict["acc_by_C_and_gamma"][idx_C, idx_gamma] + acc/n_iter
+                results_dict["prec_by_C_and_gamma"][idx_C, idx_gamma]=results_dict["prec_by_C_and_gamma"][idx_C, idx_gamma]+prec/n_iter
+                results_dict["recall_by_C_and_gamma"][idx_C, idx_gamma]=results_dict["recall_by_C_and_gamma"][idx_C, idx_gamma]+recall/n_iter
+                results_dict["f1_by_C_and_gamma"][idx_C, idx_gamma]=results_dict["f1_by_C_and_gamma"][idx_C, idx_gamma]+f1_score/n_iter
                     
-                    idx_gamma=idx_gamma + 1
-                
-                index_C=index_C + 1
-                
-        result=dict()
-        result["C_list"]=self.C_list
-        result["gamma_list"]=self.gamma_list
-        result["tr_err_by_C_and_gamma"]=tr_err_by_C_and_gamma
-        result["cv_err_by_C_and_gamma"]=cv_err_by_C_and_gamma
-        result["acc_by_C_and_gamma"]=acc_by_C_and_gamma
-        result["prec_by_C_and_gamma"]=prec_by_C_and_gamma
-        result["recall_by_C_and_gamma"]=recall_by_C_and_gamma
-        result["f1_by_C_and_gamma"]=f1_by_C_and_gamma
-        
-        return result
-            
-            
-    def gamma_selection(self,X,y,gamma_list, 
-                    classifier_by_gamma_function, error_measure_function,
-                    classifier_by_gamma_function_params = None, 
-                    test_size = 0.3, n_iterations = 20 ):
-                    
-        tr_err_by_gamma=np.zeros(len(gamma_list),dtype=np.float)
-        cv_err_by_gamma=np.zeros(len(gamma_list),dtype=np.float)
-        
-        acc_by_gamma=np.zeros(len(gamma_list),dtype=np.float)
-        prec_by_gamma=np.zeros(len(gamma_list),dtype=np.float)
-        recall_by_gamma=np.zeros(len(gamma_list),dtype=np.float)
-        f1_by_gamma=np.zeros(len(gamma_list),dtype=np.float)
-        
-        set_ripartitions = StratifiedShuffleSplit(y, n_iterations = n_iterations, 
-                                                  test_size = test_size, indices = False)
-                
-        n_iter=len(set_ripartitions)
-        for train,test in set_ripartitions:
-            X_tr,X_cv,y_tr,y_cv =X[train],X[test],y[train],y[test]
-            
-            idx_gamma=0
-            for gamma in gamma_list:
-                
-                classifier = classifier_by_gamma_function(X_tr, y_tr,gamma=gamma)
-                          
-                tr_err, cv_err = error_measure_function(classifier,X_tr,y_tr,X_cv,y_cv)
-                
-                tr_err_by_gamma[idx_gamma]=tr_err_by_gamma[idx_gamma]+tr_err/n_iter
-                cv_err_by_gamma[idx_gamma]=cv_err_by_gamma[idx_gamma]+cv_err/n_iter
-                
-                #it is assumed that we are dealing with a sklearn classifier...
-                y_pred = classifier.predict(X_cv)
-
-                if hasattr(metrics,"accuracy_score"):
-                    acc = metrics.accuracy_score(y_cv,y_pred)
-                else:
-                    assert hasattr(metrics,"zero_one_score")
-                    acc = metrics.zero_one_score(y_cv, y_pred)
-                prec=metrics.precision_score(y_cv,y_pred)
-                recall=metrics.recall_score(y_cv,y_pred)
-                f1_score=metrics.f1_score(y_cv,y_pred)
-                
-                acc_by_gamma[idx_gamma] = acc_by_gamma[idx_gamma] + acc/n_iter
-                prec_by_gamma[idx_gamma] = prec_by_gamma[idx_gamma] + prec/n_iter
-                recall_by_gamma[idx_gamma] = recall_by_gamma[idx_gamma] + recall/n_iter
-                f1_by_gamma[idx_gamma] = f1_by_gamma[idx_gamma] + f1_score/n_iter
-                
-                idx_gamma+=1
-                
-                result=dict()
-                result["gamma_list"]=gamma_list
-                result["tr_err_by_gamma"]=tr_err_by_gamma
-                result["cv_err_by_gamma"]=cv_err_by_gamma
-                result["acc_by_gamma"]=acc_by_gamma
-                result["prec_by_gamma"]=prec_by_gamma
-                result["recall_by_gamma"]=recall_by_gamma
-                result["f1_by_gamma"]=f1_by_gamma
-        
-        return result
-            
+        return results_dict
+         
             
 def SVM_RBF_by_C_and_gamma_function(X,y,C,gamma):
     
@@ -358,7 +315,7 @@ class RecursiveFeaturesElimination(object):
             
             extracted_X = np.reshape(extracted_X,(num_samples,i+1))
             
-            set_ripartitions = StratifiedShuffleSplit(y, n_iterations = self.n_iterations, 
+            set_ripartitions = StratifiedShuffleSplit(y, n_iter = self.n_iterations, 
                                                   test_size = self.test_size, indices=False)
     
             n_iter = len(set_ripartitions)
@@ -436,7 +393,7 @@ class SVM(object):
     
     def model_selection(self,X,y,kernel=SVM_RBF, C_list = None, gamma_list = None, test_size = 0.3, n_iterations = 20,
                         show_accuracy_flag = True, show_precision_flag = True, show_recall_flag = True,
-                        show_f1_score_flag = True):
+                        show_f1_score_flag = True, max_num_cpus = -1):
         
         assert X!=None and y!=None     
         assert len(X)==len(y)
@@ -450,7 +407,7 @@ class SVM(object):
             model_selection = ModelSelection(C_list=C_list)
             parameters_result = model_selection.C_selection(X, y, C_list, classifier_by_C_function = linear_SVM_by_C_function, 
                                         error_measure_function = misclassification_errors, 
-                                        test_size = test_size, n_iterations = n_iterations)
+                                        test_size = test_size, n_iterations = n_iterations, max_num_cpus = max_num_cpus)
         
             self.print_linear_SVM_results(parameters_result, show_accuracy_flag = show_accuracy_flag, 
                                           show_precision_flag = show_precision_flag, 
@@ -463,26 +420,29 @@ class SVM(object):
             parameters_result = model_selection.C_gamma_selection(X, y, 
                                                                   classifier_by_C_and_gamma_function = SVM_RBF_by_C_and_gamma_function, 
                                                                   error_measure_function = misclassification_errors, 
-                                                                  test_size = 0.3, n_iterations = n_iterations)
+                                                                  test_size = 0.3, n_iterations = n_iterations, max_num_cpus = max_num_cpus)
             
             self.print_SVM_RBF_results(parameters_result, show_accuracy_flag = show_accuracy_flag, 
                                        show_precision_flag = show_precision_flag, 
                                        show_recall_flag = show_recall_flag, 
                                        show_f1_score_flag = show_f1_score_flag )
-            
+                    
         elif self.kernel == SVM_RBF_Chi2_squared:
             
             model_selection = ModelSelection(C_list = C_list)
             parameters_result = model_selection.C_selection(X, y, C_list,
                                                                 classifier_by_C_function = SVM_RBF_Chi2_squared_by_C_function, 
                                                                 error_measure_function = misclassification_errors, 
-                                                                test_size = 0.3, n_iterations = n_iterations)
+                                                                test_size = 0.3, n_iterations = n_iterations, max_num_cpus = max_num_cpus)
             
             self.print_linear_SVM_results(parameters_result, show_accuracy_flag = show_accuracy_flag, 
                                        show_precision_flag = show_precision_flag, 
                                        show_recall_flag = show_recall_flag, 
                                        show_f1_score_flag = show_f1_score_flag )
-            
+        
+        else:
+            raise Exception("Unsupported kernel!")
+         
         return parameters_result
     
     
@@ -774,7 +734,7 @@ class SVM(object):
         
         assert isinstance(C,(int,float))
         
-        set_ripartitions = StratifiedShuffleSplit(y, n_iterations = n_iterations, 
+        set_ripartitions = StratifiedShuffleSplit(y, n_iter = n_iterations, 
                                                   test_size = test_size, indices = False)
         
         if kernel == SVM_linear:

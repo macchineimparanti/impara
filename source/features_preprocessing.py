@@ -38,7 +38,7 @@ class Scaler(object):
             masked_X = np.log1p(masked_X)
             
         if self.bias_and_variance_flag:
-            self.bias_and_variance_scaler = preprocessing.Scaler().fit(masked_X)
+            self.bias_and_variance_scaler = preprocessing.StandardScaler().fit(masked_X)
             masked_X = self.bias_and_variance_scaler.transform(masked_X)
             
         return masked_X
