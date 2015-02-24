@@ -249,7 +249,7 @@ class ModelSelection(object):
             
 def SVM_RBF_by_C_and_gamma_function(X,y,C,gamma):
     
-    classifier = SVC(kernel="rbf",C=C,gamma=gamma)
+    classifier = SVC(kernel="rbf",C=C,gamma=gamma, class_weight = 'auto')
     classifier.fit(X,y)
         
     return classifier
@@ -257,7 +257,7 @@ def SVM_RBF_by_C_and_gamma_function(X,y,C,gamma):
     
 def linear_SVM_by_C_function(X,y,C):
     
-    classifier = LinearSVC(C=C)
+    classifier = LinearSVC(C=C, class_weight = 'auto')
     classifier.fit(X,y)
        
     return classifier
@@ -265,7 +265,7 @@ def linear_SVM_by_C_function(X,y,C):
 
 def SVM_RBF_Chi2_squared_by_C_function(X,y,C):
         
-    classifier = SVC(kernel=chi2_kernel, C = C)
+    classifier = SVC(kernel=chi2_kernel, C = C, class_weight = 'auto')
     classifier.fit(X,y)
     
     return classifier
@@ -454,7 +454,7 @@ class SVM(object):
         for C_cur in xrange(len(parameters_result["C_list"])):
             C_ = parameters_result["C_list"][C_cur]
             acc = parameters_result["acc_by_C"][C_cur]
-            if acc>acc_max:
+            if acc>=acc_max:
                 acc_max = acc
                 C_max = C_
                     
@@ -474,7 +474,7 @@ class SVM(object):
                 C_ = parameters_result["C_list"][C_cur]
                 gamma_ = parameters_result["gamma_list"][gamma_cur]
                 acc = parameters_result["acc_by_C_and_gamma"][C_cur, gamma_cur]
-                if acc>acc_max:
+                if acc>=acc_max:
                     acc_max = acc
                     C_max = C_
                     gamma_max = gamma_
@@ -493,7 +493,7 @@ class SVM(object):
         for gamma_cur in xrange(len(parameters_result["gamma_list"])):
             gamma_ = parameters_result["gamma_list"][gamma_cur]
             acc = parameters_result["acc_by_C"][gamma_cur]
-            if acc>acc_max:
+            if acc>=acc_max:
                 acc_max = acc
                 gamma_max = gamma_
                     
@@ -517,7 +517,7 @@ class SVM(object):
                 C_ = parameters_result["C_list"][C_cur]
                 acc = parameters_result["acc_by_C"][C_cur]
                 print "C = {0}, accuracy = {1}".format(C_,acc)
-                if acc>acc_max:
+                if acc>=acc_max:
                     acc_max = acc
                     C_max = C_
                         
@@ -536,7 +536,7 @@ class SVM(object):
                 C_ = parameters_result["C_list"][C_cur]
                 prec = parameters_result["prec_by_C"][C_cur]
                 print "C = {0}, precision = {1}".format(C_,prec)
-                if prec>prec_max:
+                if prec>=prec_max:
                     prec_max = prec
                     C_max = C_
                    
@@ -555,7 +555,7 @@ class SVM(object):
                 C_ = parameters_result["C_list"][C_cur]
                 rec = parameters_result["recall_by_C"][C_cur]
                 print "C = {0}, recall = {1}".format(C_, rec)
-                if rec>rec_max:
+                if rec>=rec_max:
                     rec_max = rec
                     C_max = C_
                     
@@ -574,7 +574,7 @@ class SVM(object):
                 C_ = parameters_result["C_list"][C_cur]
                 f1 = parameters_result["f1_by_C"][C_cur]
                 print "C = {0}, f1 = {1}".format(C_,f1)
-                if f1>f1_max:
+                if f1>=f1_max:
                     f1_max = f1
                     C_max = C_
                         
@@ -601,7 +601,7 @@ class SVM(object):
                     gamma_ = parameters_result["gamma_list"][gamma_cur]
                     acc = parameters_result["acc_by_C_and_gamma"][C_cur, gamma_cur]
                     print "C = {0}, gamma = {1}, accuracy = {2}".format(C_, gamma_,acc)
-                    if acc>acc_max:
+                    if acc>=acc_max:
                         acc_max = acc
                         C_max = C_
                         gamma_max = gamma_
@@ -625,7 +625,7 @@ class SVM(object):
                     gamma_ = parameters_result["gamma_list"][gamma_cur]
                     prec = parameters_result["prec_by_C_and_gamma"][C_cur, gamma_cur]
                     print "C = {0}, gamma = {1}, precision = {2}".format(C_, gamma_,prec)
-                    if prec>prec_max:
+                    if prec>=prec_max:
                         prec_max = prec
                         C_max = C_
                         gamma_max = gamma_
@@ -649,7 +649,7 @@ class SVM(object):
                     gamma_ = parameters_result["gamma_list"][gamma_cur]
                     rec = parameters_result["recall_by_C_and_gamma"][C_cur, gamma_cur]
                     print "C = {0}, gamma = {1}, recall = {2}".format(C_, gamma_,rec)
-                    if rec>rec_max:
+                    if rec>=rec_max:
                         rec_max = rec
                         C_max = C_
                         gamma_max = gamma_
@@ -673,7 +673,7 @@ class SVM(object):
                     gamma_ = parameters_result["gamma_list"][gamma_cur]
                     f1 = parameters_result["f1_by_C_and_gamma"][C_cur, gamma_cur]
                     print "C = {0}, gamma = {1}, f1 = {2}".format(C_, gamma_,f1)
-                    if f1>f1_max:
+                    if f1>=f1_max:
                         f1_max = f1
                         C_max = C_
                         gamma_max = gamma_
@@ -709,13 +709,13 @@ class SVM(object):
         
         if kernel == SVM_RBF:
             assert isinstance(gamma,(int,float))
-            self.classifier = SVC(kernel="rbf",C=C,gamma=gamma)
+            self.classifier = SVC(kernel="rbf",C=C,gamma=gamma, class_weight = 'auto')
             self.classifier.fit(X,y)
         elif kernel == SVM_linear:
-            self.classifier = LinearSVC(C=C)
+            self.classifier = LinearSVC(C=C, class_weight = 'auto')
             self.classifier.fit(X,y)
         elif kernel == SVM_RBF_Chi2_squared:
-            self.classifier = SVC(kernel=chi2_kernel,C=C)
+            self.classifier = SVC(kernel=chi2_kernel,C=C, class_weight = 'auto')
             self.classifier.fit(X,y)
         else:
             raise Exception("Classification kernel not supported!")
@@ -738,12 +738,12 @@ class SVM(object):
                                                   test_size = test_size, indices = False)
         
         if kernel == SVM_linear:
-            classifier = LinearSVC(C=C)
+            classifier = LinearSVC(C=C, class_weight = 'auto')
         elif kernel == SVM_RBF:
             assert isinstance(gamma,(int,float))
-            classifier = SVC(kernel="rbf", C=C, gamma=gamma)
+            classifier = SVC(kernel="rbf", C=C, gamma=gamma, class_weight = 'auto')
         elif kernel == SVM_RBF_Chi2_squared:
-            classifier = SVC(kernel=chi2_kernel,C=C)
+            classifier = SVC(kernel=chi2_kernel,C=C, class_weight = 'auto')
             
         accuracy_avg = 0.0
         precision_avg = 0.0
