@@ -487,13 +487,19 @@ def main():
             sf, train_sf, test_sf = load_sf_features(params_dict["load_sf_path"])
         else:
             sf = SparseFilter(n_layers=params_dict["n_layers_sf"],n_features=params_dict["n_features_sf"], n_iterations=params_dict["n_iterations_sf"])
-            sf.fit(np.r_[train,test])
-            train_sf = sf.transform(train)
-            test_sf = sf.transform(test)
-        
+            if params_dict["test_set_flag"]:
+                sf.fit(np.r_[train,test])
+                train_sf = sf.transform(train)
+                test_sf = sf.transform(test)
+            else:
+                sf.fit(train)
+                train_sf = sf.transform(train)        
+
         if params_dict["save_sf_flag"]:
-            save_sf_features(sf, train_sf, test_sf, params_dict["save_sf_path"])
-        
+            if params_dict["test_set_flag"]:
+                save_sf_features(sf, train_sf, test_sf, params_dict["save_sf_path"])
+            else:
+                save_sf_features(sf, train_sf, None, params_dict["save_sf_path"])
         print "Features sparse filtering performed!"
         
         print train_sf.shape
